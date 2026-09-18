@@ -1,0 +1,281 @@
+import SwiftUI
+
+/// Create or edit a profile, including its PIN.
+public struct ProfileEditorView: View {
+    @Environment(\.trackerTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+
+    private let store: TrackerStore
+    private let session: ProfileSession
+    /// `nil` creates a new profile.
+    private let existing: Profile?
+
+    @State private var name: String
+    @State private var colorHex: String
+    @State private var symbolName: String
+    @State private var role: ProfileRole
+    @State private var wantsPIN: Bool
+    @State private var isSettingPIN = false
+    @State private var showDeleteConfirmation = false
+
+    public init(store: TrackerStore, session: ProfileSession, profile: Profile?) {
+        self.store = store
+        self.session = session
+        self.existing = profile
+
+        let palette = ChartPalette.standard
+        _name = State(initialValue: profile?.name ?? "")
+        _colorHex = State(initialValue: profile?.colorHex ?? palette.seriesHex(store.profiles.count))
+        _symbolName = State(initialValue: profile?.symbolName ?? "person.fill")
+        _role = State(initialValue: profile?.role ?? .member)
+        _wantsPIN = State(initialValue: profile?.isPINProtected ?? false)
+    }
+
+    private var isNew: Bool { existing == nil }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    public var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Spacer()
+                        ProfileAvatar(profile: previewProfile, size: 88)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+
+                    TextField("Name", text: $name)
+                        .textInputAutocapitalization(.words)
+                }
+
+                Section("Color") {
+                    ColorSwatchPicker(selection: $colorHex)
+                }
+
+                Section("Icon") {
+                    SymbolPicker(selection: $symbolName, symbols: Self.profileSymbols)
+                }
+
+                Section {
+                    Picker("Role", selection: $role) {
+                        ForEach(ProfileRole.allCases, id: \.self) { role in
+                            Text(role.displayName).tag(role)
+                        }
+                    }
+                } footer: {
+                    Text("Owners can see every profile's data and change export settings. Members only see their own.")
+                }
+
+                Section {
+                    Toggle("Require a PIN", isOn: $wantsPIN)
+
+                    if wantsPIN {
+                        Button(hasPIN ? "Change PIN" : "Set PIN") {
+                            isSettingPIN = true
+                        }
+                        .disabled(isNew && !canSave)
+                    }
+                } header: {
+                    Text("Privacy")
+                } footer: {
+                    Text("A 4-digit PIN keeps other people on this device out of this profile. It's a gate for a shared iPad, not encryption — don't store anything here you'd need protected from someone determined.")
+                }
+
+                if let existing, !isNew {
+                    Section {
+                        Button("Delete profile", role: .destructive) {
+                            showDeleteConfirmation = true
+                        }
+                    } footer: {
+                        Text("Deletes \(existing.name) and every tracker, entry and goal underneath. This cannot be undone.")
+                    }
+                }
+            }
+            .navigationTitle(isNew ? "New profile" : "Edit profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(!canSave)
+                }
+            }
+            .sheet(isPresented: $isSettingPIN) {
+                if let profile = savedProfileForPIN() {
+                    PINSetupView(profile: profile) { pin in
+                        try? session.setPIN(pin, for: profile)
+                        wantsPIN = true
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Delete \(existing?.name ?? "profile")?",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete everything", role: .destructive) {
+                    if let existing {
+                        store.deleteProfile(existing.id)
+                    }
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Every tracker, entry and goal for this profile is removed. There is no undo.")
+            }
+        }
+    }
+
+    private var previewProfile: Profile {
+        Profile(
+            id: existing?.id ?? UUID(),
+            name: name.isEmpty ? "New" : name,
+            colorHex: colorHex,
+            symbolName: symbolName,
+            role: role,
+            isPINProtected: wantsPIN
+        )
+    }
+
+    private var hasPIN: Bool {
+        guard let existing else { return false }
+        return session.hasPIN(for: existing.id)
+    }
+
+    /// The PIN sheet needs a persisted profile to attach to; save a new one first.
+    private func savedProfileForPIN() -> Profile? {
+        if let existing { return existing }
+        return store.profiles.first { $0.name == name.trimmingCharacters(in: .whitespaces) }
+    }
+
+    private func save() {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        if var profile = existing {
+            profile.name = trimmed
+            profile.colorHex = colorHex
+            profile.symbolName = symbolName
+            profile.role = role
+            profile.isPINProtected = wantsPIN
+            store.update(profile)
+
+            if !wantsPIN {
+                session.removePIN(for: profile)
+            }
+        } else {
+            let created = store.addProfile(
+                name: trimmed,
+                colorHex: colorHex,
+                symbolName: symbolName,
+                role: role
+            )
+            if wantsPIN {
+                // Nudge straight into PIN setup rather than leaving a profile
+                // marked protected with no PIN behind it.
+                isSettingPIN = true
+                _ = created
+                return
+            }
+        }
+        dismiss()
+    }
+
+    static let profileSymbols = [
+        "person.fill", "figure.run", "figure.basketball", "figure.soccer",
+        "star.fill", "bolt.fill", "leaf.fill", "pawprint.fill",
+        "gamecontroller.fill", "music.note", "book.fill", "paintbrush.fill"
+    ]
+}
+
+// MARK: - ColorSwatchPicker
+
+/// Picks from the categorical palette rather than a full color wheel.
+///
+/// Constraining the choice is the point: every profile and tracker color comes
+/// from the validated set, so two people never end up with colors nobody can tell
+/// apart, and the charts stay readable no matter what gets picked.
+public struct ColorSwatchPicker: View {
+    @Environment(\.trackerTheme) private var theme
+    @Binding var selection: String
+
+    public init(selection: Binding<String>) {
+        self._selection = selection
+    }
+
+    public var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 46), spacing: 12)], spacing: 12) {
+            ForEach(Array(theme.palette.categorical.enumerated()), id: \.offset) { index, pair in
+                let hex = pair.light
+                Button {
+                    selection = hex
+                } label: {
+                    Circle()
+                        .fill(pair.color)
+                        .frame(width: 38, height: 38)
+                        .overlay {
+                            if selection.caseInsensitiveCompare(hex) == .orderedSame {
+                                Circle()
+                                    .strokeBorder(theme.textPrimary, lineWidth: 2.5)
+                                    .padding(-4)
+                            }
+                        }
+                        .overlay {
+                            if selection.caseInsensitiveCompare(hex) == .orderedSame {
+                                Image(systemName: "checkmark")
+                                    .font(theme.typography.label.weight(.bold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Color \(index + 1)")
+                .accessibilityAddTraits(
+                    selection.caseInsensitiveCompare(hex) == .orderedSame ? .isSelected : []
+                )
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - SymbolPicker
+
+public struct SymbolPicker: View {
+    @Environment(\.trackerTheme) private var theme
+    @Binding var selection: String
+    let symbols: [String]
+
+    public init(selection: Binding<String>, symbols: [String]) {
+        self._selection = selection
+        self.symbols = symbols
+    }
+
+    public var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 10)], spacing: 10) {
+            ForEach(symbols, id: \.self) { symbol in
+                Button {
+                    selection = symbol
+                } label: {
+                    Image(systemName: symbol)
+                        .font(.title3)
+                        .foregroundStyle(selection == symbol ? theme.surface : theme.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(selection == symbol ? theme.textPrimary : theme.plane)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(symbol)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}

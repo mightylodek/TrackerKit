@@ -1,0 +1,337 @@
+import SwiftUI
+import SwiftData
+
+/// The whole library as one view.
+///
+/// Drop this in and you get profiles, the PIN gate, the dashboard, the visual
+/// gallery and export settings. Everything underneath is public, so a host app
+/// that wants its own navigation can ignore this and compose the pieces directly.
+///
+/// ```swift
+/// @main
+/// struct MyApp: App {
+///     var body: some Scene {
+///         WindowGroup {
+///             TrackerKitRootView(configuration: .init(appGroupIdentifier: "group.com.example.app"))
+///         }
+///     }
+/// }
+/// ```
+public struct TrackerKitRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
+    @State private var store: TrackerStore
+    @State private var session: ProfileSession
+    @State private var deliveryRequest: ExportRequest?
+
+    private let theme: TrackerTheme
+    private let initialTab: TrackerKitTab
+    private let showsHeroStyleSwitcher: Bool
+
+    public init(configuration: TrackerKitConfiguration = .init()) {
+        let store: TrackerStore
+
+        do {
+            let container = try TrackerKitSchema.container(
+                inMemory: configuration.inMemory,
+                appGroupIdentifier: configuration.appGroupIdentifier
+            )
+            store = TrackerStore(
+                context: ModelContext(container),
+                calculator: PeriodCalculator(calendar: configuration.calendar),
+                stoplight: configuration.stoplight
+            )
+        } catch {
+            // A store that can't open is not recoverable, but crashing the host
+            // app on launch is worse than running in memory for this session.
+            let container = try! TrackerKitSchema.container(inMemory: true)
+            store = TrackerStore(context: ModelContext(container))
+        }
+
+        store.reload()
+
+        if configuration.seedSampleDataWhenEmpty, store.profiles.isEmpty {
+            SampleData.seed(into: store)
+            store.reload()
+        }
+
+        let session = ProfileSession(
+            store: store,
+            appGroupIdentifier: configuration.appGroupIdentifier
+        )
+        session.autoLockInterval = configuration.autoLockInterval
+
+        if let name = configuration.autoSelectProfileNamed,
+           let profile = store.profiles.first(where: {
+               $0.name.caseInsensitiveCompare(name) == .orderedSame && !$0.isPINProtected
+           }) {
+            session.select(profile)
+        }
+
+        _store = State(initialValue: store)
+        _session = State(initialValue: session)
+        self.theme = configuration.theme
+        self.initialTab = configuration.initialTab
+        self.showsHeroStyleSwitcher = configuration.showsHeroStyleSwitcher
+    }
+
+    public var body: some View {
+        ProfileGateView(store: store, session: session) {
+            TrackerKitTabs(
+                store: store,
+                session: session,
+                initialTab: initialTab,
+                showsHeroStyleSwitcher: showsHeroStyleSwitcher
+            )
+        }
+        .trackerTheme(theme)
+        .tint(theme.accent)
+        .onAppear {
+            ExportScheduler.registerCategory()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                session.lockIfIdle()
+                store.reload()
+            case .background:
+                session.publishWidgets()
+            default:
+                break
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .trackerKitExportRequested)) { note in
+            guard let userInfo = note.userInfo,
+                  let request = ExportRequest(userInfo: userInfo)
+            else { return }
+            deliveryRequest = request
+        }
+        .sheet(item: $deliveryRequest) { request in
+            if let report = store.buildReport(
+                for: request.profileID,
+                lookbackDays: request.lookbackDays
+            ) {
+                ExportDeliveryView(
+                    report: report,
+                    channel: request.channel,
+                    format: request.format,
+                    recipients: store.schedules
+                        .first { $0.id == request.scheduleID }?.recipients ?? []
+                ) {
+                    if let scheduleID = request.scheduleID {
+                        store.markScheduleDelivered(scheduleID)
+                    }
+                }
+                .trackerTheme(theme)
+            }
+        }
+    }
+}
+
+// MARK: - TrackerKitTabs
+
+/// The signed-in shell.
+public struct TrackerKitTabs: View {
+    @Environment(\.trackerTheme) private var theme
+
+    private let store: TrackerStore
+    private let session: ProfileSession
+
+    @State private var selection: TrackerKitTab
+
+    private let showsHeroStyleSwitcher: Bool
+
+    public init(
+        store: TrackerStore,
+        session: ProfileSession,
+        initialTab: TrackerKitTab = .today,
+        showsHeroStyleSwitcher: Bool = false
+    ) {
+        self.store = store
+        self.session = session
+        self.showsHeroStyleSwitcher = showsHeroStyleSwitcher
+        _selection = State(initialValue: initialTab)
+    }
+
+    public var body: some View {
+        TabView(selection: $selection) {
+            NavigationStack {
+                TrackerDashboardView(
+                    store: store,
+                    session: session,
+                    showsHeroStyleSwitcher: showsHeroStyleSwitcher
+                )
+                .toolbar { profileMenu }
+            }
+            .tabItem { Label("Today", systemImage: "chart.bar.doc.horizontal") }
+            .tag(TrackerKitTab.today)
+
+            NavigationStack {
+                ChartGalleryView(store: store)
+                    .toolbar { profileMenu }
+            }
+            .tabItem { Label("Gallery", systemImage: "square.grid.2x2") }
+            .tag(TrackerKitTab.gallery)
+
+            NavigationStack {
+                TrackerKitSettingsView(store: store, session: session)
+            }
+            .tabItem { Label("Settings", systemImage: "gearshape") }
+            .tag(TrackerKitTab.settings)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var profileMenu: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Menu {
+                ForEach(store.profiles) { profile in
+                    Button {
+                        session.select(profile)
+                    } label: {
+                        Label(
+                            profile.name,
+                            systemImage: profile.id == store.activeProfileID
+                                ? "checkmark"
+                                : (profile.isPINProtected ? "lock" : "person")
+                        )
+                    }
+                }
+                Divider()
+                Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right") {
+                    session.signOut()
+                }
+            } label: {
+                ProfileAvatar(profile: store.activeProfile, size: 30)
+            }
+            .accessibilityLabel("Switch profile")
+        }
+    }
+}
+
+// MARK: - TrackerKitSettingsView
+
+/// Profiles, exports, appearance and the data reset.
+public struct TrackerKitSettingsView: View {
+    @Environment(\.trackerTheme) private var theme
+
+    private let store: TrackerStore
+    private let session: ProfileSession
+
+    @State private var editingProfile: Profile?
+    @State private var isAddingProfile = false
+    @State private var showResetConfirmation = false
+
+    public init(store: TrackerStore, session: ProfileSession) {
+        self.store = store
+        self.session = session
+    }
+
+    public var body: some View {
+        List {
+            Section("Profiles") {
+                ForEach(store.profiles) { profile in
+                    Button {
+                        editingProfile = profile
+                    } label: {
+                        HStack(spacing: 12) {
+                            ProfileAvatar(profile: profile, size: 34)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(profile.name)
+                                    .font(.body)
+                                    .foregroundStyle(theme.textPrimary)
+                                Text(profileSubtitle(profile))
+                                    .font(theme.typography.label)
+                                    .foregroundStyle(theme.textSecondary)
+                            }
+                            Spacer()
+                            if profile.isPINProtected {
+                                Image(systemName: "lock.fill")
+                                    .font(theme.typography.label)
+                                    .foregroundStyle(theme.textMuted)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    isAddingProfile = true
+                } label: {
+                    Label("Add profile", systemImage: "person.badge.plus")
+                }
+            }
+
+            Section("Exports") {
+                NavigationLink {
+                    ExportSettingsView(store: store)
+                } label: {
+                    Label("Weekly reports", systemImage: "envelope")
+                }
+            }
+
+            Section {
+                LabeledContent("Trackers", value: "\(store.trackers.count)")
+                LabeledContent("Entries", value: "\(store.entries.count)")
+                LabeledContent("Days logged in", value: "\(store.loginDays.count)")
+                LabeledContent("Login streak", value: store.loginStreak().displayText)
+            } header: {
+                Text("This profile")
+            }
+
+            Section {
+                Button("Reset all data", role: .destructive) {
+                    showResetConfirmation = true
+                }
+            } footer: {
+                Text("Removes every profile, tracker, goal and entry on this device. PINs are cleared too.")
+            }
+
+            Section {
+                EmptyView()
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TrackerKit \(TrackerKit.version)")
+                    Text("Charts use a colorblind-validated palette: worst adjacent CVD ΔE 9.1 in light, 8.4 in dark.")
+                }
+                .font(theme.typography.micro)
+            }
+        }
+        .navigationTitle("Settings")
+        .sheet(item: $editingProfile) { profile in
+            ProfileEditorView(store: store, session: session, profile: profile)
+        }
+        .sheet(isPresented: $isAddingProfile) {
+            ProfileEditorView(store: store, session: session, profile: nil)
+        }
+        .confirmationDialog(
+            "Reset everything?",
+            isPresented: $showResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete all data", role: .destructive) {
+                for profile in store.profiles {
+                    PINManager.shared.removePIN(for: profile.id)
+                }
+                store.deleteEverything()
+                ExportScheduler.cancelAll()
+                session.signOut()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every profile and everything under it is removed. There is no undo.")
+        }
+    }
+
+    private func profileSubtitle(_ profile: Profile) -> String {
+        var parts = [profile.role.displayName]
+        if profile.id == store.activeProfileID {
+            parts.append("\(store.activeTrackers.count) trackers")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+#Preview("Root") {
+    TrackerKitRootView(configuration: .init(inMemory: true, seedSampleDataWhenEmpty: true))
+}
