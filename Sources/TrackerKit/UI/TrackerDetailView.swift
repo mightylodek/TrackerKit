@@ -177,6 +177,7 @@ public struct TrackerDetailView: View {
                                 font: theme.typography.displaySize(38),
                                 color: theme.textPrimary
                             )
+                            .accessibilityIdentifier("detail.actual")
                             .tracking(theme.typography.displayTracking)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
@@ -517,6 +518,7 @@ public struct TrackerDetailView: View {
         .buttonStyle(.plain)
         .trackerControlSurface(shape: theme.radii.actionShape, isProminent: true)
         .sensoryFeedback(.increase, trigger: current?.actual ?? 0)
+        .accessibilityIdentifier("detail.quickAdd")
     }
 
     private var detailedLogAction: some View {

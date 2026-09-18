@@ -15,11 +15,13 @@
 /* Begin PBXFileReference section */
 		TK0000000000000000000201 /* TrackerKitDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TrackerKitDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		TK0000000000000000000F04 /* TrackerDashWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TrackerDashWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		TK0000000000000000000U01 /* TrackerDashUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrackerDashUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		TK0000000000000000000301 /* TrackerKitDemo */ = {isa = PBXFileSystemSynchronizedRootGroup; path = TrackerKitDemo; sourceTree = "<group>"; };
 		TK0000000000000000000F05 /* TrackerDashWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; path = TrackerDashWidgets; sourceTree = "<group>"; };
+		TK0000000000000000000U02 /* TrackerDashUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = TrackerDashUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,6 +41,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		TK0000000000000000000U03 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -47,6 +56,7 @@
 			children = (
 				TK0000000000000000000301 /* TrackerKitDemo */,
 				TK0000000000000000000F05 /* TrackerDashWidgets */,
+				TK0000000000000000000U02 /* TrackerDashUITests */,
 				TK0000000000000000000502 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +66,7 @@
 			children = (
 				TK0000000000000000000201 /* TrackerKitDemo.app */,
 				TK0000000000000000000F04 /* TrackerDashWidgets.appex */,
+				TK0000000000000000000U01 /* TrackerDashUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -111,6 +122,27 @@
 			productReference = TK0000000000000000000F04 /* TrackerDashWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		TK0000000000000000000U04 /* TrackerDashUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = TK0000000000000000000U05 /* Build configuration list for PBXNativeTarget "TrackerDashUITests" */;
+			buildPhases = (
+				TK0000000000000000000U06 /* Sources */,
+				TK0000000000000000000U03 /* Frameworks */,
+				TK0000000000000000000U07 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				TK0000000000000000000U08 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				TK0000000000000000000U02 /* TrackerDashUITests */,
+			);
+			name = TrackerDashUITests;
+			productName = TrackerDashUITests;
+			productReference = TK0000000000000000000U01 /* TrackerDashUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -126,6 +158,10 @@
 					};
 					TK0000000000000000000F09 = {
 						CreatedOnToolsVersion = 27.0;
+					};
+					TK0000000000000000000U04 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = TK0000000000000000000601;
 					};
 				};
 			};
@@ -148,6 +184,7 @@
 			targets = (
 				TK0000000000000000000601 /* TrackerKitDemo */,
 				TK0000000000000000000F09 /* TrackerDashWidgets */,
+				TK0000000000000000000U04 /* TrackerDashUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -161,6 +198,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		TK0000000000000000000F12 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		TK0000000000000000000U07 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -198,6 +242,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		TK0000000000000000000U06 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -205,6 +256,11 @@
 			isa = PBXTargetDependency;
 			target = TK0000000000000000000F09 /* TrackerDashWidgets */;
 			targetProxy = TK0000000000000000000F13 /* PBXContainerItemProxy */;
+		};
+		TK0000000000000000000U08 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = TK0000000000000000000601 /* TrackerKitDemo */;
+			targetProxy = TK0000000000000000000U09 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -215,6 +271,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = TK0000000000000000000F09;
 			remoteInfo = TrackerDashWidgets;
+		};
+		TK0000000000000000000U09 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = TK0000000000000000000A01 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = TK0000000000000000000601;
+			remoteInfo = TrackerKitDemo;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -309,6 +372,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Config/TrackerDash.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = F9UZH6382Q;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = Config/TrackerDash-Info.plist;
 				ENABLE_PREVIEWS = YES;
@@ -336,6 +400,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Config/TrackerDash.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = F9UZH6382Q;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = Config/TrackerDash-Info.plist;
 				ENABLE_PREVIEWS = YES;
@@ -364,6 +429,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				CODE_SIGN_ENTITLEMENTS = Config/TrackerDashWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = F9UZH6382Q;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = TrackerDash;
@@ -392,6 +458,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				CODE_SIGN_ENTITLEMENTS = Config/TrackerDashWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = F9UZH6382Q;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = TrackerDash;
@@ -411,6 +478,42 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		TK0000000000000000000U10 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = F9UZH6382Q;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mightylodek.software.trackerdash.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TrackerKitDemo;
+			};
+			name = Debug;
+		};
+		TK0000000000000000000U11 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = F9UZH6382Q;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mightylodek.software.trackerdash.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TrackerKitDemo;
 			};
 			name = Release;
 		};
@@ -440,6 +543,15 @@
 			buildConfigurations = (
 				TK0000000000000000000F14 /* Debug */,
 				TK0000000000000000000F15 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		TK0000000000000000000U05 /* Build configuration list for PBXNativeTarget "TrackerDashUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				TK0000000000000000000U10 /* Debug */,
+				TK0000000000000000000U11 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

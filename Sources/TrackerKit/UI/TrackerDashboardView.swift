@@ -190,20 +190,36 @@ public struct TrackerDashboardView: View {
     private var trackerList: some View {
         VStack(spacing: 0) {
             ForEach(Array(visibleTrackers.enumerated()), id: \.element.id) { index, tracker in
-                // Value-based so a widget deep link can push the identical
-                // destination by appending to the navigation path.
-                NavigationLink(value: tracker) {
-                    TrackerRowCard(
+                // The link and the quick-log button are siblings, never nested.
+                // A Button inside a NavigationLink's label doesn't reliably get
+                // the tap — the link takes it — so logging silently did nothing.
+                HStack(spacing: 0) {
+                    NavigationLink(value: tracker) {
+                        TrackerRowCard(
+                            tracker: tracker,
+                            snapshot: snapshotsByID[tracker.id],
+                            streak: store.goalStreak(for: tracker.id),
+                            sparkline: store.dailyValues(for: tracker.id, dayCount: 21),
+                            isGrouped: true,
+                            showsLogButton: false,
+                            onQuickLog: { quickLog(tracker) },
+                            onDetailedLog: { loggingTracker = tracker }
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    // The row's own label aggregates its children, so this is
+                    // the reliable handle for assertions — identifiers on Text
+                    // inside a Button label get dropped.
+                    .accessibilityIdentifier("row.\(tracker.title)")
+
+                    TrackerQuickLogButton(
                         tracker: tracker,
                         snapshot: snapshotsByID[tracker.id],
-                        streak: store.goalStreak(for: tracker.id),
-                        sparkline: store.dailyValues(for: tracker.id, dayCount: 21),
-                        isGrouped: true,
                         onQuickLog: { quickLog(tracker) },
                         onDetailedLog: { loggingTracker = tracker }
                     )
+                    .padding(.trailing, theme.spacing.cardPadding)
                 }
-                .buttonStyle(.plain)
                 .staggeredAppear(index: min(index, 8))
 
                 if index < visibleTrackers.count - 1 {
@@ -267,6 +283,68 @@ public struct TrackerDashboardView: View {
     }
 }
 
+// MARK: - TrackerQuickLogButton
+
+/// One-tap logging.
+///
+/// Deliberately a standalone view rather than part of the row, because it must
+/// be a **sibling** of any `NavigationLink`, never a child of one. A `Button`
+/// inside a link's label doesn't reliably receive taps — SwiftUI routes them to
+/// the link — which is exactly how a quick-log button ends up doing nothing.
+public struct TrackerQuickLogButton: View {
+    @Environment(\.trackerTheme) private var theme
+
+    private let tracker: Tracker
+    private let snapshot: ProgressSnapshot?
+    private let onQuickLog: () -> Void
+    private let onDetailedLog: () -> Void
+
+    public init(
+        tracker: Tracker,
+        snapshot: ProgressSnapshot?,
+        onQuickLog: @escaping () -> Void,
+        onDetailedLog: @escaping () -> Void
+    ) {
+        self.tracker = tracker
+        self.snapshot = snapshot
+        self.onQuickLog = onQuickLog
+        self.onDetailedLog = onDetailedLog
+    }
+
+    private var isDoneToday: Bool {
+        guard tracker.kind == .checkbox, let snapshot else { return false }
+        return snapshot.actual > 0
+    }
+
+    public var body: some View {
+        Button(action: onQuickLog) {
+            Image(systemName: tracker.kind == .checkbox
+                  ? (isDoneToday ? "checkmark.circle.fill" : "circle")
+                  : "plus.circle.fill")
+                .font(.title2)
+                .foregroundStyle(
+                    isDoneToday ? theme.statusColor(.green) : theme.identityColor(for: tracker)
+                )
+                .contentTransition(.symbolEffect(.replace))
+                .trackerTouchTarget()
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.increase, trigger: snapshot?.actual ?? 0)
+        // A context menu rather than a bare `simultaneousGesture` long-press:
+        // the gesture competed with the button's own tap recognition, and a
+        // hidden long-press is undiscoverable besides.
+        .contextMenu {
+            Button("Log a specific amount…", systemImage: "slider.horizontal.3") {
+                onDetailedLog()
+            }
+        }
+        .accessibilityLabel(
+            tracker.kind == .checkbox ? "Toggle \(tracker.title)" : "Add to \(tracker.title)"
+        )
+        .accessibilityIdentifier("quickLog.\(tracker.title)")
+    }
+}
+
 // MARK: - TrackerRowCard
 
 /// A tracker on the dashboard: identity, standing, a sparkline, and logging in one tap.
@@ -280,7 +358,11 @@ public struct TrackerRowCard: View {
     private let onQuickLog: () -> Void
     private let onDetailedLog: () -> Void
     private let isGrouped: Bool
+    private let showsLogButton: Bool
 
+    /// - Parameter showsLogButton: set false when the caller places a
+    ///   ``TrackerQuickLogButton`` alongside the row instead. Required whenever
+    ///   the row is wrapped in a `NavigationLink`.
     /// - Parameter isGrouped: when true the row draws no surface of its own,
     ///   because it sits inside a shared list container. A list of eight
     ///   individually-shadowed cards reads as clutter; one container with
@@ -291,6 +373,7 @@ public struct TrackerRowCard: View {
         streak: StreakSummary,
         sparkline: [DailyValue],
         isGrouped: Bool = false,
+        showsLogButton: Bool = true,
         onQuickLog: @escaping () -> Void,
         onDetailedLog: @escaping () -> Void
     ) {
@@ -299,6 +382,7 @@ public struct TrackerRowCard: View {
         self.streak = streak
         self.sparkline = sparkline
         self.isGrouped = isGrouped
+        self.showsLogButton = showsLogButton
         self.onQuickLog = onQuickLog
         self.onDetailedLog = onDetailedLog
     }
@@ -385,7 +469,14 @@ public struct TrackerRowCard: View {
                         }
                     }
 
-                    logButton
+                    if showsLogButton {
+                        TrackerQuickLogButton(
+                            tracker: tracker,
+                            snapshot: snapshot,
+                            onQuickLog: onQuickLog,
+                            onDetailedLog: onDetailedLog
+                        )
+                    }
                 }
 
                 if let snapshot, snapshot.target != nil {
@@ -407,24 +498,6 @@ public struct TrackerRowCard: View {
                 .frame(height: 26)
             }
         }
-    }
-
-    private var logButton: some View {
-        Button(action: onQuickLog) {
-            Image(systemName: tracker.kind == .checkbox
-                  ? (isDoneToday ? "checkmark.circle.fill" : "circle")
-                  : "plus.circle.fill")
-                .font(.title2)
-                .foregroundStyle(isDoneToday ? theme.statusColor(.green) : theme.identityColor(for: tracker))
-                .contentTransition(.symbolEffect(.replace))
-                .trackerTouchTarget()
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.increase, trigger: snapshot?.actual ?? 0)
-        .accessibilityLabel(tracker.kind == .checkbox ? "Toggle \(tracker.title)" : "Add to \(tracker.title)")
-        .simultaneousGesture(
-            LongPressGesture().onEnded { _ in onDetailedLog() }
-        )
     }
 }
 

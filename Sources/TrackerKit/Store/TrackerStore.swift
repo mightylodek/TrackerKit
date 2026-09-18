@@ -81,6 +81,25 @@ public final class TrackerStore {
         if cacheDay != today { invalidateCache() }
     }
 
+    /// Touches the observed state that every derived value is computed from.
+    ///
+    /// This exists because the caches above are `@ObservationIgnored`, and that
+    /// combination has a trap in it: on a cache *hit* an accessor returns
+    /// without ever reading `entries` or `trackers`, so SwiftUI registers no
+    /// dependency on them. The next mutation then notifies nobody and the view
+    /// silently never refreshes — the data is correct, the screen is stale.
+    ///
+    /// That shipped. Logging from the dashboard updated the store and left the
+    /// row showing the old number, because the row's snapshot was computed
+    /// during a body pass that only hit caches.
+    ///
+    /// So every cached accessor registers first and answers second. The reads
+    /// are free; the registration is the point.
+    private func registerObservation() {
+        _ = entries.count
+        _ = trackers.count
+    }
+
     // MARK: Dependencies
 
     public let context: ModelContext
@@ -534,6 +553,7 @@ public final class TrackerStore {
     /// value, and a linear scan of every entry each time adds up fast.
     public func entries(for trackerID: UUID) -> [Entry] {
         validateCacheDay()
+        registerObservation()
 
         if let index = entryIndex {
             return index[trackerID] ?? []
@@ -566,6 +586,7 @@ public final class TrackerStore {
 
     /// Current-period progress for one tracker.
     public func currentProgress(for trackerID: UUID, now: Date = .now) -> ProgressSnapshot? {
+        registerObservation()
         guard let tracker = tracker(trackerID) else { return nil }
         validateCacheDay()
 
@@ -596,6 +617,7 @@ public final class TrackerStore {
     ) -> [ProgressSnapshot] {
         guard let tracker = tracker(trackerID) else { return [] }
         validateCacheDay()
+        registerObservation()
 
         let key = "\(trackerID.uuidString)-\(periodCount)-\(cadence?.rawValue ?? "auto")"
         if let cached = historyCache[key] { return cached }
@@ -619,6 +641,7 @@ public final class TrackerStore {
     ) -> [DailyValue] {
         guard let tracker = tracker(trackerID) else { return [] }
         validateCacheDay()
+        registerObservation()
 
         let key = "\(trackerID.uuidString)-\(dayCount)"
         if let cached = dailyCache[key] { return cached }
@@ -634,6 +657,7 @@ public final class TrackerStore {
     }
 
     public func goalStreak(for trackerID: UUID, now: Date = .now) -> StreakSummary {
+        registerObservation()
         guard let tracker = tracker(trackerID) else { return .empty }
         validateCacheDay()
 
