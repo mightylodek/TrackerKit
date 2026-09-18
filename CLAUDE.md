@@ -118,6 +118,6 @@ env SIMCTL_CHILD_TKDEMO_PROFILE=Alex SIMCTL_CHILD_TKDEMO_TAB=gallery \
 
 - Widget extension target isn't built — the views and snapshot plumbing exist,
   but the extension has to be created in a host app project.
-- Not a git repository yet. `git init && git add . && git commit` when ready.
+- Repo: `git@github.com:mightylodek/TrackerKit.git` (public), branch `main`.
 - The demo app runs in-memory; flip `inMemory: false` in `TrackerKitDemoApp` to
   exercise real persistence and migration.
