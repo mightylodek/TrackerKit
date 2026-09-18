@@ -56,6 +56,57 @@ public struct ProfileGateView<Content: View>: View {
     // MARK: Picker
 
     private var picker: some View {
+        if store.profiles.isEmpty {
+            return AnyView(welcome)
+        }
+        return AnyView(profileGrid)
+    }
+
+    /// The true first screen of the app.
+    ///
+    /// The picker's own copy ("pick up where you left off") is addressed to
+    /// someone who has been here before, and a grid holding nothing but an Add
+    /// tile reads as a screen that failed to load rather than one waiting on a
+    /// first step.
+    private var welcome: some View {
+        VStack(spacing: theme.spacing.xl) {
+            Spacer(minLength: 0)
+
+            Image(systemName: "target")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(theme.accent)
+
+            VStack(spacing: theme.spacing.sm) {
+                Text("Track what matters")
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(theme.textPrimary)
+                Text("Set up a profile to get started. Everyone sharing this device gets their own.")
+                    .font(theme.typography.subheadline)
+                    .foregroundStyle(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            }
+
+            if allowsProfileCreation {
+                Button("Create a profile") { isAddingProfile = true }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(theme.accent)
+                    // `.borderedProminent` picks its own white label, which on a
+                    // bright accent lands near 2:1. The theme already carries the
+                    // ink meant to sit on the accent.
+                    .foregroundStyle(theme.onAccent)
+                    .accessibilityIdentifier("welcome.createProfile")
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, theme.spacing.screenMargin)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.plane)
+    }
+
+    private var profileGrid: some View {
         ScrollView {
             VStack(spacing: 28) {
                 VStack(spacing: 6) {

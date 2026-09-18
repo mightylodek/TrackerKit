@@ -49,6 +49,7 @@ public struct ProfileEditorView: View {
                     .listRowBackground(Color.clear)
 
                     TextField("Name", text: $name)
+                        .accessibilityIdentifier("profile.name")
                         .textInputAutocapitalization(.words)
                 }
 
@@ -103,6 +104,7 @@ public struct ProfileEditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
+                        .accessibilityIdentifier("profile.save")
                         .disabled(!canSave)
                 }
             }
@@ -182,6 +184,13 @@ public struct ProfileEditorView: View {
                 isSettingPIN = true
                 _ = created
                 return
+            }
+            // The very first profile has no picking to do. Dropping the user
+            // back to a grid of one and asking them to tap it is a step that
+            // exists only because the screen behind the sheet happens to be a
+            // picker — select it and let the first run continue.
+            if store.profiles.count == 1 {
+                session.select(created)
             }
         }
         dismiss()

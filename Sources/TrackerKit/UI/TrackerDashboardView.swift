@@ -14,6 +14,9 @@ public struct TrackerDashboardView: View {
 
     @State private var isAddingTracker = false
     @State private var isCustomising = false
+    @State private var isOnboarding = false
+    /// Set once the wizard has been offered, so dismissing it doesn't loop.
+    @State private var hasOfferedOnboarding = false
     @State private var loggingTracker: Tracker?
 
     public init(
@@ -35,25 +38,30 @@ public struct TrackerDashboardView: View {
     public var body: some View {
         ScrollView {
             LazyVStack(spacing: theme.spacing.sectionGap) {
-                ForEach(cards) { card in
-                    DashboardCardView(
-                        card: card,
-                        store: store,
-                        session: session,
-                        showsHeroStyleSwitcher: showsHeroStyleSwitcher,
-                        onLog: quickLog,
-                        onDetailedLog: { loggingTracker = $0 }
-                    )
-                    .padding(.horizontal, theme.spacing.screenMargin)
-                }
-
-                if store.activeTrackers.isEmpty {
+                if store.needsOnboarding {
+                    // A hero with no goals renders a large empty ring and the
+                    // rollup an empty bar. Showing the furniture of a dashboard
+                    // that has nothing in it makes a new profile look broken
+                    // rather than new.
                     emptyState
                         .padding(.horizontal, theme.spacing.screenMargin)
-                }
+                        .padding(.top, theme.spacing.xxl)
+                } else {
+                    ForEach(cards) { card in
+                        DashboardCardView(
+                            card: card,
+                            store: store,
+                            session: session,
+                            showsHeroStyleSwitcher: showsHeroStyleSwitcher,
+                            onLog: quickLog,
+                            onDetailedLog: { loggingTracker = $0 }
+                        )
+                        .padding(.horizontal, theme.spacing.screenMargin)
+                    }
 
-                footerActions
-                    .padding(.horizontal, theme.spacing.screenMargin)
+                    footerActions
+                        .padding(.horizontal, theme.spacing.screenMargin)
+                }
             }
             .padding(.vertical)
             // Clearance for the floating tab bar. Without it the last rows sit
@@ -72,6 +80,9 @@ public struct TrackerDashboardView: View {
                     Button("Customise dashboard", systemImage: "square.grid.2x2") {
                         isCustomising = true
                     }
+                    Button("Add from a template", systemImage: "square.stack.3d.up") {
+                        isOnboarding = true
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -84,6 +95,20 @@ public struct TrackerDashboardView: View {
         .sheet(isPresented: $isCustomising) {
             DashboardEditorView(store: store)
         }
+        .sheet(isPresented: $isOnboarding) {
+            OnboardingView(store: store)
+        }
+        // A profile with nothing in it gets the wizard rather than an empty
+        // screen and a shrug. Offered once — dismissing it must not loop.
+        //
+        // Keyed on `needsOnboarding` rather than `onAppear`: the profile is
+        // often selected a beat after the view appears, and an onAppear check
+        // ran too early and silently never offered anything.
+        .task(id: store.needsOnboarding) {
+            guard !hasOfferedOnboarding, store.needsOnboarding else { return }
+            hasOfferedOnboarding = true
+            isOnboarding = true
+        }
         .sheet(item: $loggingTracker) { tracker in
             LogEntryView(tracker: tracker, store: store, session: session)
         }
@@ -93,10 +118,15 @@ public struct TrackerDashboardView: View {
         ContentUnavailableView {
             Label("Nothing tracked yet", systemImage: "target")
         } description: {
-            Text("Add the first habit or goal for \(store.activeProfile?.name ?? "this profile").")
+            Text("Start from a template, or add your own.")
         } actions: {
-            Button("Add tracker") { isAddingTracker = true }
+            Button("Choose a template") { isOnboarding = true }
                 .buttonStyle(.borderedProminent)
+                .tint(theme.accent)
+                .foregroundStyle(theme.onAccent)
+                .accessibilityIdentifier("empty.chooseTemplate")
+            Button("Add a tracker") { isAddingTracker = true }
+                .accessibilityIdentifier("empty.addTracker")
         }
     }
 

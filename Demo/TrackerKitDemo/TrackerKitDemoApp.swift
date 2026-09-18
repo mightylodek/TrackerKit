@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import TrackerKit
 
 /// Demo host for TrackerKit.
@@ -40,7 +41,23 @@ struct TrackerKitDemoApp: App {
             // Glass is composited at display time and cannot be captured from an
             // offscreen render, so verifying the floating action bar means seeing
             // it on a real screen. Every type used here is public library API.
-            if ProcessInfo.processInfo.environment["TKDEMO_SEEDLAYOUT"] != nil {
+            if ProcessInfo.processInfo.environment["TKDEMO_ONBOARD"] != nil {
+                EmptyProfileDemo(
+                    theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"])
+                )
+            } else if ProcessInfo.processInfo.environment["TKDEMO_FRESH"] != nil {
+                // A genuinely cold start: no profiles, no trackers, nothing
+                // seeded. This is the only route that exercises the welcome
+                // screen and the hand-off from profile creation to the wizard.
+                TrackerKitRootView(
+                    configuration: TrackerKitConfiguration(
+                        inMemory: true,
+                        seedSampleDataWhenEmpty: false,
+                        theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"]),
+                        autoLockInterval: 0
+                    )
+                )
+            } else if ProcessInfo.processInfo.environment["TKDEMO_SEEDLAYOUT"] != nil {
                 // Screenshot aid: seeds a customised dashboard so the arranged
                 // layout can be captured without driving the editor by hand.
                 SeededLayoutDemo(
@@ -78,6 +95,30 @@ struct TrackerKitDemoApp: App {
                     showsHeroStyleSwitcher: true
                     )
                 )
+            }
+        }
+    }
+}
+
+/// A profile with no trackers, so the onboarding wizard runs for real.
+private struct EmptyProfileDemo: View {
+    let theme: TrackerTheme
+
+    @State private var store: TrackerStore = {
+        let container = try! TrackerKitSchema.container(inMemory: true)
+        return TrackerStore(context: ModelContext(container))
+    }()
+
+    var body: some View {
+        let session = ProfileSession(store: store)
+        NavigationStack {
+            TrackerDashboardView(store: store, session: session)
+        }
+        .trackerTheme(theme)
+        .task {
+            if store.profiles.isEmpty {
+                let profile = store.addProfile(name: "Sam")
+                session.select(profile)
             }
         }
     }

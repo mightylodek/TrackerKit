@@ -675,3 +675,103 @@ struct BatchUndoTests {
         #expect(store.lastAction == nil)
     }
 }
+
+// MARK: - Templates
+
+@MainActor
+struct TemplateTests {
+
+    private func makeStore() throws -> TrackerStore {
+        let container = try TrackerKitSchema.container(inMemory: true)
+        let store = TrackerStore(context: ModelContext(container))
+        let profile = store.addProfile(name: "A")
+        store.activeProfileID = profile.id
+        return store
+    }
+
+    @Test("A fresh profile needs onboarding; a set-up one doesn't")
+    func needsOnboarding() throws {
+        let store = try makeStore()
+        #expect(store.needsOnboarding)
+
+        store.apply(.youthSport)
+        #expect(!store.needsOnboarding)
+    }
+
+    @Test("Applying a template creates its trackers with goals and steps")
+    func appliesBlueprints() throws {
+        let store = try makeStore()
+        let created = store.apply(.youthSport)
+
+        #expect(created.count == TrackerTemplate.youthSport.recommended.count)
+        #expect(store.activeTrackers.contains { $0.title == "Practice" })
+
+        let practice = try #require(store.activeTrackers.first { $0.title == "Practice" })
+        #expect(practice.currentGoal?.target == 150)
+        #expect(practice.currentGoal?.cadence == .weekly)
+        // The template's explicit step must survive, not be re-derived.
+        #expect(practice.quickLogStep == 15)
+    }
+
+    @Test("Unticked trackers are not created")
+    func respectsSelection() throws {
+        let store = try makeStore()
+        let template = TrackerTemplate.youthSport
+        let onlyWater = template.blueprints.filter { $0.title == "Water" }
+
+        store.apply(template, selecting: onlyWater)
+        #expect(store.activeTrackers.count == 1)
+        #expect(store.activeTrackers.first?.title == "Water")
+    }
+
+    @Test("The template's dashboard is bound to the trackers actually created")
+    func bindsLayout() throws {
+        let store = try makeStore()
+        store.apply(.youthSport)
+
+        let heatmap = try #require(store.dashboardLayout.first { $0.kind == .heatmap })
+        let bound = try #require(heatmap.trackerID.flatMap { store.tracker($0) })
+        #expect(bound.title == "Practice")
+        #expect(store.canRender(heatmap))
+    }
+
+    @Test("A layout slot whose tracker wasn't selected is dropped, not dangling")
+    func dropsUnboundSlots() throws {
+        let store = try makeStore()
+        let template = TrackerTemplate.youthSport
+        // Practice is what the heatmap slot points at — leave it out.
+        let withoutPractice = template.recommended.filter { $0.title != "Practice" }
+
+        store.apply(template, selecting: withoutPractice)
+        #expect(!store.dashboardLayout.contains { $0.kind == .heatmap })
+        #expect(store.dashboardLayout.allSatisfy { store.canRender($0) })
+    }
+
+    @Test("The blank template creates nothing")
+    func blankTemplate() throws {
+        let store = try makeStore()
+        store.apply(.blank)
+        #expect(store.activeTrackers.isEmpty)
+    }
+
+    @Test("Every built-in template is coherent")
+    func templatesAreWellFormed() {
+        for template in TrackerTemplate.all {
+            #expect(!template.name.isEmpty)
+            #expect(!template.summary.isEmpty)
+
+            for slot in template.layout where slot.kind.needsTracker {
+                let title = slot.trackerTitle
+                #expect(title != nil, "\(template.name): a tracker-scoped slot names no tracker")
+                #expect(
+                    template.blueprints.contains { $0.title == title },
+                    "\(template.name): layout points at '\(title ?? "")', which it never creates"
+                )
+            }
+
+            for blueprint in template.blueprints where blueprint.target != nil {
+                #expect(blueprint.target! > 0, "\(template.name)/\(blueprint.title) has a non-positive target")
+            }
+        }
+    }
+}

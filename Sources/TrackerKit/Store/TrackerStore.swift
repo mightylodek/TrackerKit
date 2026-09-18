@@ -593,6 +593,76 @@ public final class TrackerStore {
         reloadProfileScopedData()
     }
 
+    // MARK: - Templates
+
+    /// Creates the selected trackers and a dashboard arranged to suit them.
+    ///
+    /// One batch, so a five-tracker template is a single save rather than five
+    /// saves and five reloads — and so a half-applied template can't exist.
+    ///
+    /// - Parameter selecting: which blueprints to create. Defaults to the
+    ///   template's own recommendations.
+    @discardableResult
+    public func apply(
+        _ template: TrackerTemplate,
+        selecting selection: [TrackerBlueprint]? = nil
+    ) -> [Tracker] {
+        guard activeProfileID != nil else { return [] }
+        let chosen = selection ?? template.recommended
+        var created: [Tracker] = []
+
+        performBatch {
+            for blueprint in chosen {
+                let goal = blueprint.target.map {
+                    GoalVersion(
+                        target: $0,
+                        cadence: blueprint.cadence,
+                        direction: blueprint.direction,
+                        unit: blueprint.unit,
+                        aggregation: blueprint.kind.defaultAggregation,
+                        note: "From the \(template.name) template"
+                    )
+                }
+
+                guard var tracker = addTracker(
+                    title: blueprint.title,
+                    kind: blueprint.kind,
+                    detail: blueprint.detail,
+                    symbolName: blueprint.symbolName,
+                    goal: goal
+                ) else { continue }
+
+                if let increment = blueprint.quickLogIncrement {
+                    tracker.quickLogIncrement = increment
+                    update(tracker)
+                }
+                created.append(tracker)
+            }
+        }
+
+        // Bind the template's layout to what was actually created. A slot whose
+        // tracker wasn't selected is dropped rather than left dangling.
+        let byTitle = Dictionary(
+            created.map { ($0.title, $0.id) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let cards: [DashboardCard] = template.layout.compactMap { slot in
+            guard slot.kind.needsTracker else { return DashboardCard(kind: slot.kind) }
+            guard let title = slot.trackerTitle, let id = byTitle[title] else { return nil }
+            return DashboardCard(kind: slot.kind, trackerID: id)
+        }
+        if !cards.isEmpty {
+            setDashboardLayout(cards)
+        }
+
+        return created
+    }
+
+    /// Whether this profile has been set up yet.
+    public var needsOnboarding: Bool {
+        activeProfileID != nil && trackers.isEmpty
+    }
+
     // MARK: - Dashboard layout
 
     /// Replaces the active profile's dashboard composition.
