@@ -138,6 +138,7 @@ public struct TrackerKitTabs: View {
     private let session: ProfileSession
 
     @State private var selection: TrackerKitTab
+    @State private var todayPath = NavigationPath()
 
     private let showsHeroStyleSwitcher: Bool
 
@@ -153,14 +154,32 @@ public struct TrackerKitTabs: View {
         _selection = State(initialValue: initialTab)
     }
 
+    /// Routes a widget deep link to the tracker it names.
+    ///
+    /// Silently ignores links to trackers that no longer exist — a widget can
+    /// outlive the thing it points at, and a crash or an error alert would both
+    /// be worse than landing on the dashboard.
+    public func handle(_ link: WidgetDeepLink) {
+        guard let id = link.trackerID, let tracker = store.tracker(id) else {
+            selection = .today
+            return
+        }
+        selection = .today
+        todayPath = NavigationPath()
+        todayPath.append(tracker)
+    }
+
     public var body: some View {
         TabView(selection: $selection) {
-            NavigationStack {
+            NavigationStack(path: $todayPath) {
                 TrackerDashboardView(
                     store: store,
                     session: session,
                     showsHeroStyleSwitcher: showsHeroStyleSwitcher
                 )
+                .navigationDestination(for: Tracker.self) { tracker in
+                    TrackerDetailView(tracker: tracker, store: store, session: session)
+                }
                 .toolbar { profileMenu }
             }
             .tabItem { Label("Today", systemImage: "chart.bar.doc.horizontal") }
@@ -178,6 +197,10 @@ public struct TrackerKitTabs: View {
             }
             .tabItem { Label("Settings", systemImage: "gearshape") }
             .tag(TrackerKitTab.settings)
+        }
+        .onOpenURL { url in
+            guard let link = WidgetDeepLink(url: url) else { return }
+            handle(link)
         }
     }
 

@@ -41,10 +41,32 @@ public struct TrackerWidgetView: View {
 
     private let snapshot: WidgetSnapshot
     private let size: TrackerWidgetSize
+    private let linksToTrackers: Bool
 
-    public init(snapshot: WidgetSnapshot, size: TrackerWidgetSize) {
+    /// - Parameter linksToTrackers: wraps each row in a deep link so a tap lands
+    ///   on that tracker rather than the dashboard. Off for previews and the
+    ///   in-app gallery, where a `Link` would be inert or actively confusing.
+    public init(
+        snapshot: WidgetSnapshot,
+        size: TrackerWidgetSize,
+        linksToTrackers: Bool = false
+    ) {
         self.snapshot = snapshot
         self.size = size
+        self.linksToTrackers = linksToTrackers
+    }
+
+    /// Wraps a row in a deep link when links are enabled.
+    @ViewBuilder
+    private func linked<Content: View>(
+        _ id: UUID,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if linksToTrackers {
+            Link(destination: WidgetDeepLink.tracker(id).url) { content() }
+        } else {
+            content()
+        }
     }
 
     private var accent: Color { Color(hex: snapshot.profileColorHex) }
@@ -144,7 +166,7 @@ public struct TrackerWidgetView: View {
                 }
 
                 ForEach(snapshot.lines.prefix(3)) { line in
-                    compactRow(line)
+                    linked(line.id) { compactRow(line) }
                 }
 
                 Spacer(minLength: 0)
@@ -202,7 +224,7 @@ public struct TrackerWidgetView: View {
 
             VStack(spacing: 11) {
                 ForEach(snapshot.lines.prefix(5)) { line in
-                    fullRow(line)
+                    linked(line.id) { fullRow(line) }
                 }
             }
 
@@ -331,10 +353,32 @@ public struct WidgetPreviewTile: View {
 
     private let snapshot: WidgetSnapshot
     private let size: TrackerWidgetSize
+    private let linksToTrackers: Bool
 
-    public init(snapshot: WidgetSnapshot, size: TrackerWidgetSize) {
+    /// - Parameter linksToTrackers: wraps each row in a deep link so a tap lands
+    ///   on that tracker rather than the dashboard. Off for previews and the
+    ///   in-app gallery, where a `Link` would be inert or actively confusing.
+    public init(
+        snapshot: WidgetSnapshot,
+        size: TrackerWidgetSize,
+        linksToTrackers: Bool = false
+    ) {
         self.snapshot = snapshot
         self.size = size
+        self.linksToTrackers = linksToTrackers
+    }
+
+    /// Wraps a row in a deep link when links are enabled.
+    @ViewBuilder
+    private func linked<Content: View>(
+        _ id: UUID,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if linksToTrackers {
+            Link(destination: WidgetDeepLink.tracker(id).url) { content() }
+        } else {
+            content()
+        }
     }
 
     public var body: some View {

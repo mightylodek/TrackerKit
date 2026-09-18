@@ -6,6 +6,15 @@ import TrackerKit
 /// Deliberately thin — every screen you see comes from the library. If this file
 /// ever grows past a few dozen lines, something that belongs in TrackerKit has
 /// leaked into the app.
+/// Identifiers shared between the app and its extensions.
+///
+/// Kept in one place because an App Group that disagrees by a character between
+/// two targets fails silently — the container just comes back nil and the widget
+/// shows placeholder data forever.
+enum TrackerDashIDs {
+    static let appGroup = "group.com.mightylodek.software.trackerkit"
+}
+
 @main
 struct TrackerKitDemoApp: App {
 
@@ -43,9 +52,11 @@ struct TrackerKitDemoApp: App {
                     // launch. Flip to `false` (and drop `seedSampleDataWhenEmpty`)
                     // to get a real persistent store.
                     inMemory: true,
-                    // Set this to a real App Group to make widgets update:
-                    //   appGroupIdentifier: "group.com.yourcompany.tracker",
-                    appGroupIdentifier: nil,
+                    // Shared container for the widget extension. Both the app and
+                    // the widget declare this in their entitlements; without it
+                    // the app runs fine and widgets simply never update, which
+                    // `SharedSnapshotStore.isConfigured` reports honestly.
+                    appGroupIdentifier: TrackerDashIDs.appGroup,
                     seedSampleDataWhenEmpty: true,
                     // TKDEMO_THEME=editorial|vivid swaps the entire visual identity.
                     // Same views, same data — only the tokens change.

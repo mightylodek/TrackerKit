@@ -114,10 +114,17 @@ env SIMCTL_CHILD_TKDEMO_PROFILE=Alex SIMCTL_CHILD_TKDEMO_TAB=gallery \
 - `23-glass-probe.png` in the catalog is the canary: if its GLASS capsule is
   missing while SOLID renders, you are looking at the harness, not a bug.
 
+## Planned work with notes already written
+
+- `docs/INTERACTIVE-WIDGETS.md` — what changes when a widget can write. Includes
+  red-team prompts. **Goes through a blue/red team review before any code.**
+- `docs/WATCH.md` — standalone watchOS app (the kids have watches, not phones).
+  Step 1 is adding `.watchOS(.v26)` and conditionalising four files; worth doing
+  early so more iOS-only API doesn't creep into the shared layer.
+
 ## Open items
 
-- Widget extension target isn't built — the views and snapshot plumbing exist,
-  but the extension has to be created in a host app project.
+- Widget extension is built and working (`Demo/TrackerDashWidgets`), display-only.
 - Repo: `git@github.com:mightylodek/TrackerKit.git` (public), branch `main`.
 - The demo app runs in-memory; flip `inMemory: false` in `TrackerKitDemoApp` to
   exercise real persistence and migration.

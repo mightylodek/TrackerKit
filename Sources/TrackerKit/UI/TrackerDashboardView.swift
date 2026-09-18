@@ -190,9 +190,9 @@ public struct TrackerDashboardView: View {
     private var trackerList: some View {
         VStack(spacing: 0) {
             ForEach(Array(visibleTrackers.enumerated()), id: \.element.id) { index, tracker in
-                NavigationLink {
-                    TrackerDetailView(tracker: tracker, store: store, session: session)
-                } label: {
+                // Value-based so a widget deep link can push the identical
+                // destination by appending to the navigation path.
+                NavigationLink(value: tracker) {
                     TrackerRowCard(
                         tracker: tracker,
                         snapshot: snapshotsByID[tracker.id],

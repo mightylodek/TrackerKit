@@ -44,6 +44,35 @@ TrackerDashboardView(store: store, session: session)
     .trackerTheme(.standard)
 ```
 
+### Widgets
+
+The demo app ships a working widget extension (`Demo/TrackerDashWidgets`) in
+small, medium and large. It reads a `WidgetSnapshot` from a shared App Group —
+the app writes on every log, toggle and profile switch, and the widget refreshes
+at midnight, which is the one change the app can't announce.
+
+Tapping a row deep-links to that tracker via `WidgetDeepLink`. The scheme is
+registered in the app's `Info.plist`; without that, links from anywhere other
+than the widget itself fail with `-10814`.
+
+Identifiers used by the demo:
+
+| | |
+|---|---|
+| App | `com.mightylodek.software.trackerdash` |
+| Widget extension | `com.mightylodek.software.trackerdash.widgets` |
+| App Group | `group.com.mightylodek.software.trackerkit` |
+
+Two notes for anyone adapting this. `NSExtensionPointIdentifier` cannot be set
+through `INFOPLIST_KEY_` — it's a nested dict, so the extension needs a real
+Info.plist base or the widget builds perfectly and never appears in the gallery.
+And `codesign -d --entitlements` reports an empty dict for simulator builds even
+when App Groups are working; verify by checking the container was created
+instead.
+
+**The widget is display-only by design.** See `docs/INTERACTIVE-WIDGETS.md` for
+what changes if it ever writes.
+
 ### Installing
 
 Add the package by path (or repo URL once it lives in one):
@@ -447,8 +476,13 @@ TKDEMO_TAB=gallery       # today | gallery | settings
 
 ## Known limits
 
-- **Widget extension not included.** The views and snapshot plumbing are here; the
-  extension target has to be created in your app project.
+- **Interactive widgets not built.** The shipped widget is read-only. Logging
+  from the widget means a second process writing to the store; the design notes
+  and the red-team prompts are in `docs/INTERACTIVE-WIDGETS.md`.
+- **watchOS not supported yet.** The package is iOS-only. Only four files hold
+  platform-locked API, so the port is smaller than it looks —
+  see `docs/WATCH.md`, which assumes a *standalone* watch app rather than a
+  phone companion.
 - **No sync.** Single device. The store is App Group–scoped at most.
 - **No HealthKit import.** Entries come from the UI or your own code.
 - **`.total` cadence goals aren't stoplit.** Without a deadline there is no such

@@ -8,14 +8,18 @@
 
 /* Begin PBXBuildFile section */
 		TK0000000000000000000101 /* TrackerKit in Frameworks */ = {isa = PBXBuildFile; productRef = TK0000000000000000000102 /* TrackerKit */; };
+		TK0000000000000000000F01 /* TrackerKit in Frameworks */ = {isa = PBXBuildFile; productRef = TK0000000000000000000F02 /* TrackerKit */; };
+		TK0000000000000000000F03 /* TrackerDashWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = TK0000000000000000000F04 /* TrackerDashWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		TK0000000000000000000201 /* TrackerKitDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TrackerKitDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		TK0000000000000000000F04 /* TrackerDashWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TrackerDashWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		TK0000000000000000000301 /* TrackerKitDemo */ = {isa = PBXFileSystemSynchronizedRootGroup; path = TrackerKitDemo; sourceTree = "<group>"; };
+		TK0000000000000000000F05 /* TrackerDashWidgets */ = {isa = PBXFileSystemSynchronizedRootGroup; path = TrackerDashWidgets; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -27,6 +31,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		TK0000000000000000000F06 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				TK0000000000000000000F01 /* TrackerKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -34,6 +46,7 @@
 			isa = PBXGroup;
 			children = (
 				TK0000000000000000000301 /* TrackerKitDemo */,
+				TK0000000000000000000F05 /* TrackerDashWidgets */,
 				TK0000000000000000000502 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -42,6 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				TK0000000000000000000201 /* TrackerKitDemo.app */,
+				TK0000000000000000000F04 /* TrackerDashWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -56,10 +70,12 @@
 				TK0000000000000000000801 /* Sources */,
 				TK0000000000000000000401 /* Frameworks */,
 				TK0000000000000000000901 /* Resources */,
+				TK0000000000000000000F07 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				TK0000000000000000000F08 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				TK0000000000000000000301 /* TrackerKitDemo */,
@@ -72,6 +88,29 @@
 			productReference = TK0000000000000000000201 /* TrackerKitDemo.app */;
 			productType = "com.apple.product-type.application";
 		};
+		TK0000000000000000000F09 /* TrackerDashWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = TK0000000000000000000F10 /* Build configuration list for PBXNativeTarget "TrackerDashWidgets" */;
+			buildPhases = (
+				TK0000000000000000000F11 /* Sources */,
+				TK0000000000000000000F06 /* Frameworks */,
+				TK0000000000000000000F12 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				TK0000000000000000000F05 /* TrackerDashWidgets */,
+			);
+			name = TrackerDashWidgets;
+			packageProductDependencies = (
+				TK0000000000000000000F02 /* TrackerKit */,
+			);
+			productName = TrackerDashWidgets;
+			productReference = TK0000000000000000000F04 /* TrackerDashWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -83,6 +122,9 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					TK0000000000000000000601 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					TK0000000000000000000F09 = {
 						CreatedOnToolsVersion = 27.0;
 					};
 				};
@@ -105,6 +147,7 @@
 			projectRoot = "";
 			targets = (
 				TK0000000000000000000601 /* TrackerKitDemo */,
+				TK0000000000000000000F09 /* TrackerDashWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -117,7 +160,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		TK0000000000000000000F12 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		TK0000000000000000000F07 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				TK0000000000000000000F03 /* TrackerDashWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		TK0000000000000000000801 /* Sources */ = {
@@ -127,7 +191,32 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		TK0000000000000000000F11 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		TK0000000000000000000F08 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = TK0000000000000000000F09 /* TrackerDashWidgets */;
+			targetProxy = TK0000000000000000000F13 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		TK0000000000000000000F13 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = TK0000000000000000000A01 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = TK0000000000000000000F09;
+			remoteInfo = TrackerDashWidgets;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin XCBuildConfiguration section */
 		TK0000000000000000000D01 /* Debug */ = {
@@ -218,8 +307,10 @@
 		TK0000000000000000000E01 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/TrackerDash.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Config/TrackerDash-Info.plist;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -232,7 +323,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.trackerkit.demo;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mightylodek.software.trackerdash;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -243,8 +334,10 @@
 		TK0000000000000000000E02 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/TrackerDash.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Config/TrackerDash-Info.plist;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -257,11 +350,67 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.trackerkit.demo;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mightylodek.software.trackerdash;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		TK0000000000000000000F14 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CODE_SIGN_ENTITLEMENTS = Config/TrackerDashWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = TrackerDash;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_FILE = Config/TrackerDashWidgets-Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mightylodek.software.trackerdash.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		TK0000000000000000000F15 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CODE_SIGN_ENTITLEMENTS = Config/TrackerDashWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = TrackerDash;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_FILE = Config/TrackerDashWidgets-Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mightylodek.software.trackerdash.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
 		};
@@ -286,6 +435,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		TK0000000000000000000F10 /* Build configuration list for PBXNativeTarget "TrackerDashWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				TK0000000000000000000F14 /* Debug */,
+				TK0000000000000000000F15 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -297,6 +455,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		TK0000000000000000000102 /* TrackerKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TrackerKit;
+		};
+		TK0000000000000000000F02 /* TrackerKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TrackerKit;
 		};

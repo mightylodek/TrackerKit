@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Declares this bundle as a WidgetKit extension. Without it the target
+	     builds and embeds cleanly and the widget simply never appears in the
+	     gallery, which is a miserable thing to debug. `INFOPLIST_KEY_` cannot
+	     express this — it only supports a flat allowlist, not a nested dict —
+	     so the key lives in a real file that the generated keys merge into. -->
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
+</dict>
+</plist>
