@@ -121,6 +121,9 @@ public struct Tracker: Identifiable, Codable, Sendable, Hashable {
     public var goalHistory: [GoalVersion]
     /// Optional daily reminder, stored as minutes past midnight.
     public var reminderMinutes: Int?
+    /// How much one tap of the quick-log button adds. `nil` derives it from the
+    /// goal — see ``quickLogStep``.
+    public var quickLogIncrement: Double?
 
     public init(
         id: UUID = UUID(),
@@ -134,7 +137,8 @@ public struct Tracker: Identifiable, Codable, Sendable, Hashable {
         sortIndex: Int = 0,
         createdAt: Date = .now,
         goalHistory: [GoalVersion] = [],
-        reminderMinutes: Int? = nil
+        reminderMinutes: Int? = nil,
+        quickLogIncrement: Double? = nil
     ) {
         self.id = id
         self.profileID = profileID
@@ -148,6 +152,7 @@ public struct Tracker: Identifiable, Codable, Sendable, Hashable {
         self.createdAt = createdAt
         self.goalHistory = goalHistory.sorted { $0.effectiveFrom < $1.effectiveFrom }
         self.reminderMinutes = reminderMinutes
+        self.quickLogIncrement = quickLogIncrement
     }
 
     public var color: Color { Color(hex: colorHex) }
@@ -174,6 +179,44 @@ public struct Tracker: Identifiable, Codable, Sendable, Hashable {
             let next = index + 1 < sorted.count ? sorted[index + 1].effectiveFrom : nil
             return (goal, next)
         }
+    }
+
+    /// How much one tap of the quick-log button adds.
+    ///
+    /// Derived from the **goal**, not the kind, because the kind cannot possibly
+    /// know. A step count and a glass of water are both `.amount`-ish and want
+    /// increments three orders of magnitude apart: a per-kind constant meant
+    /// `+` added 1 step against an 8,000 goal, which is 8,000 taps.
+    ///
+    /// The rule is roughly a twelfth of the target — about a dozen taps to
+    /// complete a goal — snapped to a number a person would actually say out
+    /// loud (1, 5, 10, 25, 100, 500…). An explicit ``quickLogIncrement``
+    /// always wins, because some trackers just know better.
+    public var quickLogStep: Double {
+        if let quickLogIncrement, quickLogIncrement > 0 { return quickLogIncrement }
+        guard kind != .checkbox, kind != .rating,
+              let target = currentGoal?.target, target > 0
+        else { return kind.defaultIncrement }
+
+        // Derived steps are always whole units of at least one. A twelfth of
+        // eight glasses is 0.67 and a twelfth of four workouts is 0.33 — nobody
+        // logs half a glass or a quarter of a workout. Anyone who genuinely
+        // needs a fractional step sets ``quickLogIncrement`` explicitly, which
+        // is checked above and wins outright.
+        return max(1, Tracker.niceStep(near: target / 12).rounded())
+    }
+
+    /// Snaps a raw amount to the nearest value a person would say out loud.
+    static func niceStep(near raw: Double) -> Double {
+        guard raw.isFinite, raw > 0 else { return 1 }
+        let candidates: [Double] = [
+            0.25, 0.5, 1, 2, 5, 10, 15, 20, 25, 50, 100, 150, 250, 500, 1000, 2500, 5000
+        ]
+        // Nearest in *log* space, so 60 lands on 50 rather than being dragged
+        // toward the larger absolute neighbour.
+        return candidates.min {
+            abs(log($0) - log(raw)) < abs(log($1) - log(raw))
+        } ?? 1
     }
 
     /// Unit taken from the current goal, falling back to the kind's default.

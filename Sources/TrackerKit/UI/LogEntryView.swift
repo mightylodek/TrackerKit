@@ -22,7 +22,7 @@ public struct LogEntryView: View {
         self.tracker = tracker
         self.store = store
         self.session = session
-        _value = State(initialValue: tracker.kind.defaultIncrement)
+        _value = State(initialValue: tracker.quickLogStep)
         _date = State(initialValue: date)
         _note = State(initialValue: "")
     }
@@ -181,8 +181,8 @@ public struct LogEntryView: View {
     private var numericControl: some View {
         VStack(spacing: 16) {
             HStack(spacing: 22) {
-                stepperButton(systemName: "minus", enabled: value > tracker.kind.defaultIncrement) {
-                    value = max(tracker.kind.defaultIncrement, value - tracker.kind.defaultIncrement)
+                stepperButton(systemName: "minus", enabled: value > tracker.quickLogStep) {
+                    value = max(tracker.quickLogStep, value - tracker.quickLogStep)
                 }
 
                 VStack(spacing: 0) {
@@ -200,7 +200,7 @@ public struct LogEntryView: View {
                 .frame(minWidth: 130)
 
                 stepperButton(systemName: "plus", enabled: true) {
-                    value += tracker.kind.defaultIncrement
+                    value += tracker.quickLogStep
                 }
             }
 
@@ -248,7 +248,7 @@ public struct LogEntryView: View {
 
     /// Sensible quick values derived from the goal, not hardcoded.
     private var quickValues: [Double] {
-        let step = tracker.kind.defaultIncrement
+        let step = tracker.quickLogStep
         guard let target = goal?.target, target > 0 else {
             return [step, step * 2, step * 5, step * 10]
         }
@@ -258,8 +258,7 @@ public struct LogEntryView: View {
         case .count:
             return [1, 2, 3, 5, 10].filter { $0 <= max(target, 10) }
         case .amount:
-            let base = (target / 4).rounded()
-            return [base, base * 2, base * 3, target].filter { $0 > 0 }
+            return [step, step * 2, step * 5, step * 10].filter { $0 <= target * 1.5 }
         default:
             return [step]
         }

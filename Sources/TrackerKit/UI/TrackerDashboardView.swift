@@ -216,6 +216,11 @@ public struct TrackerDashboardView: View {
                         tracker: tracker,
                         snapshot: snapshotsByID[tracker.id],
                         onQuickLog: { quickLog(tracker) },
+                        onLogAmount: { amount in
+                            store.log(trackerID: tracker.id, value: amount)
+                            session.touch()
+                            session.publishWidgets()
+                        },
                         onDetailedLog: { loggingTracker = tracker }
                     )
                     .padding(.trailing, theme.spacing.cardPadding)
@@ -297,17 +302,20 @@ public struct TrackerQuickLogButton: View {
     private let tracker: Tracker
     private let snapshot: ProgressSnapshot?
     private let onQuickLog: () -> Void
+    private let onLogAmount: (Double) -> Void
     private let onDetailedLog: () -> Void
 
     public init(
         tracker: Tracker,
         snapshot: ProgressSnapshot?,
         onQuickLog: @escaping () -> Void,
+        onLogAmount: @escaping (Double) -> Void = { _ in },
         onDetailedLog: @escaping () -> Void
     ) {
         self.tracker = tracker
         self.snapshot = snapshot
         self.onQuickLog = onQuickLog
+        self.onLogAmount = onLogAmount
         self.onDetailedLog = onDetailedLog
     }
 
@@ -333,13 +341,26 @@ public struct TrackerQuickLogButton: View {
         // A context menu rather than a bare `simultaneousGesture` long-press:
         // the gesture competed with the button's own tap recognition, and a
         // hidden long-press is undiscoverable besides.
+        // Multiples of the step, so a bigger session isn't twenty taps, and so
+        // the amount one tap adds is stated somewhere a person can find it.
         .contextMenu {
+            if tracker.kind != .checkbox {
+                ForEach([1.0, 2.0, 4.0], id: \.self) { multiple in
+                    let amount = tracker.quickLogStep * multiple
+                    Button("Add \(Formatters.value(amount, unit: tracker.unit))") {
+                        onLogAmount(amount)
+                    }
+                }
+                Divider()
+            }
             Button("Log a specific amount…", systemImage: "slider.horizontal.3") {
                 onDetailedLog()
             }
         }
         .accessibilityLabel(
-            tracker.kind == .checkbox ? "Toggle \(tracker.title)" : "Add to \(tracker.title)"
+            tracker.kind == .checkbox
+                ? "Toggle \(tracker.title)"
+                : "Add \(Formatters.value(tracker.quickLogStep, unit: tracker.unit)) to \(tracker.title)"
         )
         .accessibilityIdentifier("quickLog.\(tracker.title)")
     }

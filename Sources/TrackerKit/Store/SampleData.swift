@@ -82,6 +82,12 @@ public enum SampleData {
                     profileID: profile.id
                 ) else { continue }
 
+                if let increment = spec.quickLogIncrement {
+                    var updated = tracker
+                    updated.quickLogIncrement = increment
+                    store.update(updated)
+                }
+
                 // Goal history: the original goal, then any later revisions.
                 for revision in spec.goalRevisions {
                     guard let effective = calculator.calendar.date(
@@ -211,6 +217,8 @@ public enum SampleData {
         var entriesPerDay: Int = 1
         var roundsToWhole: Bool = true
         var minimumValue: Double = 1
+        /// Overrides the goal-derived quick-log step where the owner has a view.
+        var quickLogIncrement: Double?
     }
 
     struct ProfileBlueprint {
@@ -324,19 +332,25 @@ public enum SampleData {
                 baseValue: 8200,
                 missRate: 0.1,
                 improvement: 0.2,
-                minimumValue: 200
+                minimumValue: 200,
+                // A twelfth of 8,000 would snap to 500. A hundred is the unit
+                // people actually think in for steps.
+                quickLogIncrement: 100
             ),
             TrackerSpec(
                 title: "Reading",
-                detail: "Pages, any book",
+                detail: "Any book, anything counts",
                 symbolName: "book.fill",
-                kind: .count,
+                kind: .duration,
                 cadence: .weekly,
-                unit: "pages",
-                goalRevisions: [GoalRevision(daysAgo: 120, target: 120)],
-                baseValue: 18,
+                unit: "min",
+                goalRevisions: [GoalRevision(daysAgo: 120, target: 150)],
+                baseValue: 28,
                 missRate: 0.35,
-                improvement: 0.3
+                improvement: 0.3,
+                minimumValue: 5,
+                // Reading happens in ten-minute sittings, not five.
+                quickLogIncrement: 10
             )
         ]
 

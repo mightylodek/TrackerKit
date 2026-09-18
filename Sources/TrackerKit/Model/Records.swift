@@ -102,6 +102,8 @@ public final class TrackerRecord {
     public var sortIndex: Int
     public var createdAt: Date
     public var reminderMinutes: Int?
+    /// Nil derives the step from the goal. See `Tracker.quickLogStep`.
+    public var quickLogIncrement: Double?
 
     public var profile: ProfileRecord?
 
@@ -121,7 +123,8 @@ public final class TrackerRecord {
         isArchived: Bool = false,
         sortIndex: Int = 0,
         createdAt: Date = .now,
-        reminderMinutes: Int? = nil
+        reminderMinutes: Int? = nil,
+        quickLogIncrement: Double? = nil
     ) {
         self.id = id
         self.title = title
@@ -133,6 +136,7 @@ public final class TrackerRecord {
         self.sortIndex = sortIndex
         self.createdAt = createdAt
         self.reminderMinutes = reminderMinutes
+        self.quickLogIncrement = quickLogIncrement
         self.goals = []
         self.entries = []
     }
@@ -148,7 +152,8 @@ public final class TrackerRecord {
             isArchived: tracker.isArchived,
             sortIndex: tracker.sortIndex,
             createdAt: tracker.createdAt,
-            reminderMinutes: tracker.reminderMinutes
+            reminderMinutes: tracker.reminderMinutes,
+            quickLogIncrement: tracker.quickLogIncrement
         )
     }
 
@@ -165,7 +170,8 @@ public final class TrackerRecord {
             sortIndex: sortIndex,
             createdAt: createdAt,
             goalHistory: goals.map(\.value).sorted { $0.effectiveFrom < $1.effectiveFrom },
-            reminderMinutes: reminderMinutes
+            reminderMinutes: reminderMinutes,
+            quickLogIncrement: quickLogIncrement
         )
     }
 
@@ -180,6 +186,7 @@ public final class TrackerRecord {
         isArchived = tracker.isArchived
         sortIndex = tracker.sortIndex
         reminderMinutes = tracker.reminderMinutes
+        quickLogIncrement = tracker.quickLogIncrement
     }
 }
 

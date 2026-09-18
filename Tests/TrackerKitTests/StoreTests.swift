@@ -460,3 +460,101 @@ struct PINManagerTests {
         #expect(stored.count == 32, "Expected a SHA-256 digest")
     }
 }
+
+// MARK: - Undo
+
+@MainActor
+struct UndoTests {
+
+    private func makeStore() throws -> TrackerStore {
+        let container = try TrackerKitSchema.container(inMemory: true)
+        let store = TrackerStore(context: ModelContext(container))
+        let profile = store.addProfile(name: "A")
+        store.activeProfileID = profile.id
+        return store
+    }
+
+    @Test("Undo reverses an accidental double-tap")
+    func undoDoubleTap() throws {
+        let store = try makeStore()
+        let tracker = try #require(store.addTracker(
+            title: "Water", kind: .count,
+            goal: GoalVersion(target: 8, cadence: .daily, unit: "glasses")
+        ))
+
+        store.log(trackerID: tracker.id)
+        store.log(trackerID: tracker.id)   // the slip
+        #expect(store.currentProgress(for: tracker.id)?.actual == 2)
+
+        #expect(store.undoLastAction())
+        #expect(store.currentProgress(for: tracker.id)?.actual == 1, "Undo should remove only the last entry")
+    }
+
+    @Test("Undo can only be applied once per action")
+    func undoIsNotRepeatable() throws {
+        let store = try makeStore()
+        let tracker = try #require(store.addTracker(title: "Reps", kind: .count))
+
+        store.log(trackerID: tracker.id)
+        store.log(trackerID: tracker.id)
+
+        #expect(store.undoLastAction())
+        // A double-tap on Undo itself must not eat a second, legitimate entry.
+        #expect(store.undoLastAction() == false)
+        #expect(store.entries(for: tracker.id).count == 1)
+    }
+
+    @Test("Undoing a checkbox toggle puts the entry back")
+    func undoToggleOff() throws {
+        let store = try makeStore()
+        let tracker = try #require(store.addTracker(title: "Stretch", kind: .checkbox))
+
+        store.toggle(trackerID: tracker.id)
+        #expect(store.entries(for: tracker.id).count == 1)
+
+        store.toggle(trackerID: tracker.id)          // accidentally un-did it
+        #expect(store.entries(for: tracker.id).isEmpty)
+
+        #expect(store.undoLastAction())
+        #expect(store.entries(for: tracker.id).count == 1, "Toggling off should be reversible")
+    }
+
+    @Test("Undoing a rating restores the previous value, not nothing")
+    func undoReplacedValue() throws {
+        let store = try makeStore()
+        let tracker = try #require(store.addTracker(
+            title: "Mood", kind: .rating,
+            goal: GoalVersion(target: 4, cadence: .daily, unit: "/5")
+        ))
+
+        store.log(trackerID: tracker.id, value: 4)
+        store.log(trackerID: tracker.id, value: 2)   // mis-tap
+        #expect(store.currentProgress(for: tracker.id)?.actual == 2)
+
+        #expect(store.undoLastAction())
+        #expect(store.currentProgress(for: tracker.id)?.actual == 4, "Should restore 4, not delete the day")
+    }
+
+    @Test("There is nothing to undo before anything is logged")
+    func nothingToUndo() throws {
+        let store = try makeStore()
+        #expect(store.lastAction == nil)
+        #expect(store.undoLastAction() == false)
+    }
+
+    @Test("Only the most recent action is offered")
+    func onlyOneOffer() throws {
+        let store = try makeStore()
+        let water = try #require(store.addTracker(title: "Water", kind: .count))
+        let reps = try #require(store.addTracker(title: "Reps", kind: .count))
+
+        store.log(trackerID: water.id)
+        store.log(trackerID: reps.id)
+
+        #expect(store.lastAction?.trackerTitle == "Reps")
+        store.undoLastAction()
+        // The earlier Water entry survives — undo is one-deep by design.
+        #expect(store.entries(for: water.id).count == 1)
+        #expect(store.entries(for: reps.id).isEmpty)
+    }
+}

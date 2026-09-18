@@ -542,3 +542,95 @@ struct FormatterTests {
         #expect(Formatters.signedPercent(.infinity) == "—")
     }
 }
+
+// MARK: - Quick-log increments
+
+struct QuickLogStepTests {
+
+    private func tracker(kind: TrackerKind, target: Double, unit: String) -> Tracker {
+        Tracker(
+            profileID: UUID(),
+            title: "T",
+            kind: kind,
+            goalHistory: [GoalVersion(effectiveFrom: day(2026, 1, 1), target: target, unit: unit)]
+        )
+    }
+
+    @Test("The step scales with the goal, not the kind")
+    func stepScalesWithGoal() {
+        // The bug this replaces: `.amount` always stepped by 1, so an 8,000-step
+        // goal needed 8,000 taps while an 8-glass goal needed 8.
+        #expect(tracker(kind: .amount, target: 8000, unit: "steps").quickLogStep >= 100)
+        #expect(tracker(kind: .count, target: 8, unit: "glasses").quickLogStep == 1)
+        #expect(tracker(kind: .duration, target: 60, unit: "min").quickLogStep == 5)
+        #expect(tracker(kind: .duration, target: 150, unit: "min").quickLogStep >= 10)
+    }
+
+    @Test("Roughly a dozen taps completes a goal")
+    func aboutTwelveTaps() {
+        for target in [8.0, 60, 120, 150, 1000, 8000] {
+            let step = tracker(kind: .count, target: target, unit: "x").quickLogStep
+            let taps = target / step
+            #expect(taps >= 4 && taps <= 40, "target \(target) needs \(taps) taps at step \(step)")
+        }
+    }
+
+    @Test("An explicit increment always wins")
+    func explicitOverride() {
+        var subject = tracker(kind: .amount, target: 8000, unit: "steps")
+        subject.quickLogIncrement = 100
+        #expect(subject.quickLogStep == 100)
+    }
+
+    @Test("Kinds without a meaningful amount keep stepping by one")
+    func discreteKinds() {
+        #expect(tracker(kind: .checkbox, target: 1, unit: "").quickLogStep == 1)
+        #expect(tracker(kind: .rating, target: 4, unit: "/5").quickLogStep == 1)
+    }
+
+    @Test("A tracker with no goal falls back to the kind's default")
+    func noGoal() {
+        let goalless = Tracker(profileID: UUID(), title: "T", kind: .duration)
+        #expect(goalless.quickLogStep == TrackerKind.duration.defaultIncrement)
+    }
+
+    @Test("Steps snap to numbers people say out loud")
+    func niceNumbers() {
+        let nice: Set<Double> = [0.25, 0.5, 1, 2, 5, 10, 15, 20, 25, 50, 100, 150, 250, 500, 1000, 2500, 5000]
+        for raw in [0.3, 3.0, 7.0, 42.0, 380.0, 6200.0] {
+            #expect(nice.contains(Tracker.niceStep(near: raw)), "\(raw) snapped off-scale")
+        }
+    }
+}
+
+/// Guards the actual demo set, not just synthetic targets. A rule that behaves
+/// on 8,000 and 60 can still produce nonsense on 4.
+@MainActor
+struct DemoIncrementTests {
+
+    @Test("Every seeded tracker gets a step a person would actually log")
+    func demoStepsAreSane() {
+        let store = TrackerStore.preview()
+
+        for tracker in store.activeTrackers {
+            let step = tracker.quickLogStep
+            #expect(step > 0, "\(tracker.title) has a non-positive step")
+
+            switch tracker.kind {
+            case .count, .checkbox, .rating:
+                // You do one workout, not a quarter of one.
+                #expect(
+                    step >= 1 && step == step.rounded(),
+                    "\(tracker.title) steps by \(step) — discrete things step by whole numbers"
+                )
+            case .duration, .amount:
+                #expect(step >= 1, "\(tracker.title) steps by \(step)")
+            }
+
+            if let target = tracker.currentGoal?.target, target > 0 {
+                let taps = target / step
+                #expect(taps <= 100, "\(tracker.title) needs \(Int(taps)) taps to hit its goal")
+            }
+        }
+    }
+}

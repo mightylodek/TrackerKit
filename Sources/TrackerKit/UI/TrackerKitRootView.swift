@@ -198,6 +198,12 @@ public struct TrackerKitTabs: View {
             .tabItem { Label("Settings", systemImage: "gearshape") }
             .tag(TrackerKitTab.settings)
         }
+        // One undo offer for the whole shell — every screen that can log is
+        // inside this, so none of them need their own.
+        .overlay(alignment: .bottom) {
+            UndoBar(store: store)
+                .padding(.bottom, 68)
+        }
         .onOpenURL { url in
             guard let link = WidgetDeepLink(url: url) else { return }
             handle(link)

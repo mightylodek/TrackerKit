@@ -46,6 +46,10 @@ public final class TrackerStore {
     /// Set when a write fails, so a view can surface it instead of failing silently.
     public private(set) var lastError: String?
 
+    /// The most recent reversible logging action, or `nil` if there is nothing
+    /// to undo. Views observe this to offer an undo affordance.
+    public private(set) var lastAction: LoggedAction?
+
     // MARK: Derived-value cache
 
     // Dashboards read the same derived values many times per SwiftUI body pass —
@@ -500,13 +504,24 @@ public final class TrackerStore {
     ) -> Entry? {
         guard let record = trackerRecord(trackerID) else { return nil }
         let kind = TrackerKind(rawValue: record.kindRaw) ?? .checkbox
-        let resolved = value ?? kind.defaultIncrement
+        // The tracker's own step, which is derived from its goal — not the
+        // kind's constant, which cannot tell 8,000 steps from 8 glasses.
+        let resolved = value ?? record.value.quickLogStep
+
+        let tracker = record.value
 
         if kind.isSingleValuePerDay,
            let existing = record.entries.first(where: { calculator.isSameDay($0.date, date) }) {
+            let previous = existing.value
             existing.value = resolved
             existing.note = note ?? existing.note
             save()
+            lastAction = LoggedAction(
+                trackerID: trackerID,
+                trackerTitle: tracker.title,
+                summary: "Set to \(Formatters.value(resolved, unit: tracker.unit))",
+                reversal: .replaced(entryID: existing.id, previousValue: previous)
+            )
             reloadProfileScopedData()
             return existing.entryValue
         }
@@ -515,6 +530,12 @@ public final class TrackerStore {
         entry.tracker = record
         context.insert(entry)
         save()
+        lastAction = LoggedAction(
+            trackerID: trackerID,
+            trackerTitle: tracker.title,
+            summary: "Added \(Formatters.value(resolved, unit: tracker.unit))",
+            reversal: .inserted(entryID: entry.id)
+        )
         reloadProfileScopedData()
         return entry.entryValue
     }
@@ -523,11 +544,26 @@ public final class TrackerStore {
     public func toggle(trackerID: UUID, on date: Date = .now) {
         guard let record = trackerRecord(trackerID) else { return }
         if let existing = record.entries.first(where: { calculator.isSameDay($0.date, date) }) {
+            let snapshot = existing.entryValue
             context.delete(existing)
             save()
+            lastAction = LoggedAction(
+                trackerID: trackerID,
+                trackerTitle: record.value.title,
+                summary: "Marked not done",
+                reversal: .removed(entry: snapshot)
+            )
             reloadProfileScopedData()
         } else {
             log(trackerID: trackerID, value: 1, date: date)
+            if lastAction != nil {
+                lastAction = LoggedAction(
+                    trackerID: trackerID,
+                    trackerTitle: record.value.title,
+                    summary: "Marked done",
+                    reversal: lastAction!.reversal
+                )
+            }
         }
     }
 
@@ -545,6 +581,44 @@ public final class TrackerStore {
         context.delete(record)
         save()
         reloadProfileScopedData()
+    }
+
+    // MARK: - Undo
+
+    /// Reverses the most recent logging action.
+    ///
+    /// Safe to call when there is nothing to undo, and safe to call twice — the
+    /// action is cleared as soon as it is applied, so a double-tap on Undo
+    /// cannot reverse two things.
+    @discardableResult
+    public func undoLastAction() -> Bool {
+        guard let action = lastAction else { return false }
+        lastAction = nil
+
+        switch action.reversal {
+        case .inserted(let entryID):
+            guard let record = entryRecord(entryID) else { return false }
+            context.delete(record)
+
+        case .replaced(let entryID, let previousValue):
+            guard let record = entryRecord(entryID) else { return false }
+            record.value = previousValue
+
+        case .removed(let entry):
+            guard let tracker = trackerRecord(entry.trackerID) else { return false }
+            let restored = EntryRecord(entry)
+            restored.tracker = tracker
+            context.insert(restored)
+        }
+
+        save()
+        reloadProfileScopedData()
+        return true
+    }
+
+    /// Drops the undo offer without reversing anything — used when it expires.
+    public func clearLastAction() {
+        lastAction = nil
     }
 
     /// Entries for one tracker, oldest first.

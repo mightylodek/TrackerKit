@@ -90,3 +90,66 @@ final class LoggingUITests: XCTestCase {
         }
     }
 }
+
+// MARK: - Undo
+
+extension LoggingUITests {
+
+    /// The whole point of undo is the accidental double-tap, so the test is the
+    /// accidental double-tap.
+    func testUndoReversesAnAccidentalDoubleTap() {
+        let app = launchApp()
+
+        let row = app.buttons["row.\(subject)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 30))
+        let original = row.label
+
+        let plus = app.buttons["quickLog.\(subject)"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 5))
+        plus.tap()
+
+        // Wait for the row to reflect the first tap before slipping.
+        let firstChange = NSPredicate(format: "label != %@", original)
+        expectation(for: firstChange, evaluatedWith: row)
+        waitForExpectations(timeout: 10)
+        let afterOne = row.label
+
+        plus.tap()  // the slip
+        let secondChange = NSPredicate(format: "label != %@", afterOne)
+        expectation(for: secondChange, evaluatedWith: row)
+        waitForExpectations(timeout: 10)
+
+        let undo = app.buttons["undo.button"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5), "Undo was never offered")
+        XCTAssertTrue(undo.isHittable, "Undo is offered but not hittable")
+        undo.tap()
+
+        let backToOne = NSPredicate(format: "label == %@", afterOne)
+        expectation(for: backToOne, evaluatedWith: row)
+        waitForExpectations(timeout: 10) { error in
+            XCTAssertNil(
+                error,
+                "Undo did not reverse the slip. Expected '\(afterOne)', got '\(row.label)'."
+            )
+        }
+    }
+
+    /// The offer must not become permanent furniture on the screen.
+    func testUndoOfferExpires() {
+        let app = launchApp()
+
+        let plus = app.buttons["quickLog.\(subject)"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 30))
+        plus.tap()
+
+        let undo = app.buttons["undo.button"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5), "Undo was never offered")
+
+        // Offer duration is 6s; allow generous slack for a loaded machine.
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: undo)
+        waitForExpectations(timeout: 25) { error in
+            XCTAssertNil(error, "Undo offer never expired")
+        }
+    }
+}

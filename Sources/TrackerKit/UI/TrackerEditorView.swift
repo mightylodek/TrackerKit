@@ -28,6 +28,8 @@ public struct TrackerEditorView: View {
     @State private var effectiveFrom: Date
 
     @State private var showDeleteConfirmation = false
+    @State private var usesCustomIncrement: Bool
+    @State private var customIncrement: Double
 
     public init(store: TrackerStore, tracker: Tracker?) {
         self.store = store
@@ -49,6 +51,8 @@ public struct TrackerEditorView: View {
         _unit = State(initialValue: goal?.unit ?? (tracker?.kind ?? .checkbox).defaultUnit)
         _goalNote = State(initialValue: "")
         _effectiveFrom = State(initialValue: .now)
+        _usesCustomIncrement = State(initialValue: tracker?.quickLogIncrement != nil)
+        _customIncrement = State(initialValue: tracker?.quickLogIncrement ?? tracker?.quickLogStep ?? 1)
     }
 
     private var isNew: Bool { existing == nil }
@@ -97,6 +101,10 @@ public struct TrackerEditorView: View {
                 }
 
                 goalSection
+
+                if kind != .checkbox {
+                    incrementSection
+                }
 
                 if let existing, !isNew {
                     Section {
@@ -198,6 +206,54 @@ public struct TrackerEditorView: View {
         }
     }
 
+    /// What the goal-derived suggestion would be for the values currently in the
+    /// form. Shown so the default is visible rather than mysterious.
+    private var suggestedIncrement: Double {
+        var preview = Tracker(
+            profileID: existing?.profileID ?? UUID(),
+            title: title,
+            kind: kind,
+            goalHistory: hasGoal
+                ? [GoalVersion(target: target, cadence: cadence, direction: direction, unit: unit)]
+                : []
+        )
+        preview.quickLogIncrement = nil
+        return preview.quickLogStep
+    }
+
+    @ViewBuilder
+    private var incrementSection: some View {
+        Section {
+            Toggle("Set my own step", isOn: $usesCustomIncrement.animation())
+
+            if usesCustomIncrement {
+                HStack {
+                    Text("One tap adds")
+                    Spacer()
+                    TextField("0", value: $customIncrement, format: .number)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 90)
+                    Text(unit.isEmpty ? kind.defaultUnit : unit)
+                        .foregroundStyle(theme.textSecondary)
+                }
+            } else {
+                LabeledContent("One tap adds") {
+                    Text(Formatters.value(suggestedIncrement, unit: unit))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+        } header: {
+            Text("Quick logging")
+        } footer: {
+            if usesCustomIncrement {
+                Text("The + button on the dashboard adds this much. Long-press it for multiples, or to enter an exact amount.")
+            } else {
+                Text("Suggested from your goal — about a dozen taps to reach it. Turn this on if you'd rather pick your own.")
+            }
+        }
+    }
+
     private var goalPreview: String {
         let summary = GoalVersion(
             target: target, cadence: cadence, direction: direction, unit: unit
@@ -239,13 +295,14 @@ public struct TrackerEditorView: View {
             tracker.symbolName = symbolName
             tracker.colorHex = colorHex
             tracker.kind = kind
+            tracker.quickLogIncrement = usesCustomIncrement ? customIncrement : nil
             store.update(tracker)
 
             if let goal, goalIsChanging || tracker.goalHistory.isEmpty {
                 store.setGoal(goal, on: tracker.id)
             }
         } else {
-            store.addTracker(
+            let created = store.addTracker(
                 title: trimmed,
                 kind: kind,
                 detail: detail,
@@ -253,6 +310,10 @@ public struct TrackerEditorView: View {
                 colorHex: colorHex,
                 goal: goal
             )
+            if usesCustomIncrement, var created {
+                created.quickLogIncrement = customIncrement
+                store.update(created)
+            }
         }
         dismiss()
     }

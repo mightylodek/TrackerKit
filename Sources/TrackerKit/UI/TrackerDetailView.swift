@@ -507,7 +507,7 @@ public struct TrackerDetailView: View {
             session?.publishWidgets()
         } label: {
             Label(
-                "Add \(Formatters.value(tracker.kind.defaultIncrement, unit: tracker.unit))",
+                "Add \(Formatters.value(tracker.quickLogStep, unit: tracker.unit))",
                 systemImage: "plus"
             )
             .font(theme.typography.heading)
