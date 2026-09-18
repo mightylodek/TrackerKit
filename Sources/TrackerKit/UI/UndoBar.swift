@@ -4,6 +4,26 @@ import SwiftUI
 ///
 /// Placed once at the app shell so it covers every screen that can log, rather
 /// than each screen growing its own.
+public extension View {
+    /// Offers undo above this screen's bottom edge.
+    ///
+    /// A `safeAreaInset` rather than an overlay, and that distinction is the
+    /// whole fix: an overlay with a hand-tuned bottom padding sat directly on
+    /// top of the detail screen's Add button, so tapping three times to log a
+    /// thirty-minute session was impossible — the first tap put a bar over the
+    /// button.
+    ///
+    /// Place this **inside** any action-bar inset. Bottom insets anchor to the
+    /// bottom edge and grow upward, so the action bar keeps its position and the
+    /// undo bar appears above it. The button does not move under your finger
+    /// mid-tap, which matters when the whole point is tapping repeatedly.
+    func trackerUndoBar(store: TrackerStore) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            UndoBar(store: store)
+        }
+    }
+}
+
 public struct UndoBar: View {
     @Environment(\.trackerTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -16,7 +36,7 @@ public struct UndoBar: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .bottom) {
+        Group {
             if let action = store.lastAction {
                 content(for: action)
                     .transition(
@@ -33,6 +53,11 @@ public struct UndoBar: View {
                     }
             }
         }
+        // Idle, this must be genuinely absent, not merely invisible. As a
+        // zero-height container it still swallowed touches along the bottom of
+        // the screen and made the row's quick-log button unhittable — the bug
+        // this whole change was meant to fix, reintroduced one layer down.
+        .allowsHitTesting(store.lastAction != nil)
         .animation(theme.motion.snappyAnimation, value: store.lastAction?.id)
     }
 

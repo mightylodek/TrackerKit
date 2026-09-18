@@ -148,6 +148,8 @@ public struct TrackerDetailView: View {
         .sheet(isPresented: $isEditing) {
             TrackerEditorView(store: store, tracker: tracker)
         }
+        // Undo first so it lands above the action bar; the action bar stays put.
+        .trackerUndoBar(store: store)
         .safeAreaInset(edge: .bottom) {
             logBar
         }

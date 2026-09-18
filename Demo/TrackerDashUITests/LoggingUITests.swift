@@ -23,8 +23,22 @@ final class LoggingUITests: XCTestCase {
         return app
     }
 
-    /// Screen Time is the first row, so it's on screen without scrolling.
     private let subject = "Screen Time"
+
+    /// Brings an element clear of the floating tab bar.
+    ///
+    /// The tab bar floats over the bottom ~83pt and content scrolls beneath it,
+    /// so an element can exist, be on screen, and still not be tappable. Real
+    /// users scroll; so does this.
+    @discardableResult
+    private func scrollIntoReach(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        for _ in 0..<6 {
+            if element.exists && element.isHittable { return true }
+            app.swipeUp()
+            usleep(400_000)
+        }
+        return element.exists && element.isHittable
+    }
 
     func testDashboardQuickLogChangesTheNumber() {
         let app = launchApp()
@@ -35,7 +49,7 @@ final class LoggingUITests: XCTestCase {
 
         let plus = app.buttons["quickLog.\(subject)"]
         XCTAssertTrue(plus.waitForExistence(timeout: 5), "Quick-log button not found")
-        XCTAssertTrue(plus.isHittable, "Quick-log button exists but isn't hittable")
+        XCTAssertTrue(scrollIntoReach(plus, in: app), "Quick-log button never became tappable")
         plus.tap()
 
         let changed = NSPredicate(format: "label != %@", before)
@@ -106,6 +120,7 @@ extension LoggingUITests {
 
         let plus = app.buttons["quickLog.\(subject)"]
         XCTAssertTrue(plus.waitForExistence(timeout: 5))
+        XCTAssertTrue(scrollIntoReach(plus, in: app))
         plus.tap()
 
         // Wait for the row to reflect the first tap before slipping.
@@ -140,6 +155,7 @@ extension LoggingUITests {
 
         let plus = app.buttons["quickLog.\(subject)"]
         XCTAssertTrue(plus.waitForExistence(timeout: 30))
+        XCTAssertTrue(scrollIntoReach(plus, in: app))
         plus.tap()
 
         let undo = app.buttons["undo.button"]
@@ -151,5 +167,59 @@ extension LoggingUITests {
         waitForExpectations(timeout: 25) { error in
             XCTAssertNil(error, "Undo offer never expired")
         }
+    }
+}
+
+// MARK: - Repeated logging
+
+extension LoggingUITests {
+
+    /// Three taps for a thirty-minute session.
+    ///
+    /// This failed before the undo bar moved: the first tap put an undo offer
+    /// directly on top of the Add button, so taps two and three landed on the
+    /// undo bar instead. The action bar must not move or become unreachable
+    /// while an undo is being offered.
+    func testDetailAddCanBeTappedRepeatedly() {
+        let app = launchApp()
+
+        let row = app.buttons["row.\(subject)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 30))
+        row.tap()
+        XCTAssertTrue(app.navigationBars[subject].waitForExistence(timeout: 10))
+
+        let actual = app.staticTexts["detail.actual"]
+        XCTAssertTrue(actual.waitForExistence(timeout: 10))
+        let start = actual.label
+
+        let add = app.buttons["detail.quickAdd"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+
+        let firstFrame = add.frame
+        var seen: [String] = [start]
+
+        for tap in 1...3 {
+            XCTAssertTrue(
+                add.isHittable,
+                "Add button became unreachable on tap \(tap) — something is covering it"
+            )
+            add.tap()
+
+            let previous = seen.last!
+            let changed = NSPredicate(format: "label != %@", previous)
+            expectation(for: changed, evaluatedWith: actual)
+            waitForExpectations(timeout: 10) { error in
+                XCTAssertNil(error, "Tap \(tap) did not register (still '\(actual.label)')")
+            }
+            seen.append(actual.label)
+        }
+
+        // The button must not have shifted under the finger between taps.
+        XCTAssertEqual(
+            add.frame, firstFrame,
+            "Add button moved while undo was offered — it must stay put"
+        )
+
+        XCTAssertEqual(Set(seen).count, seen.count, "Each tap should produce a distinct value")
     }
 }

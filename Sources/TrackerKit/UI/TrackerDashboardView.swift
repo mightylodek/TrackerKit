@@ -118,8 +118,13 @@ public struct TrackerDashboardView: View {
                     .padding(.top, 4)
             }
             .padding(.vertical)
+            // Clearance for the floating tab bar. Without it the last rows sit
+            // permanently underneath it and their quick-log buttons cannot be
+            // tapped at all — the bar is ~83pt and content scrolls beneath it.
+            .padding(.bottom, theme.spacing.xxl * 2)
         }
         .background(theme.plane)
+        .trackerUndoBar(store: store)
         .navigationTitle(store.activeProfile?.name ?? "Tracker")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isAddingTracker) {
