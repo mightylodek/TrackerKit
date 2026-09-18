@@ -18,6 +18,12 @@ public final class ProfileRecord {
     public var createdAt: Date
     public var isPINProtected: Bool
     public var sortIndex: Int
+    /// The profile's dashboard composition, encoded as JSON.
+    ///
+    /// A blob rather than a relationship: the layout is always read and written
+    /// whole, it is small, and ordering is the entire point — which a JSON array
+    /// gives for free and a to-many relationship does not.
+    public var dashboardLayoutJSON: String?
 
     @Relationship(deleteRule: .cascade, inverse: \TrackerRecord.profile)
     public var trackers: [TrackerRecord]
@@ -36,7 +42,8 @@ public final class ProfileRecord {
         roleRaw: String = ProfileRole.member.rawValue,
         createdAt: Date = .now,
         isPINProtected: Bool = false,
-        sortIndex: Int = 0
+        sortIndex: Int = 0,
+        dashboardLayoutJSON: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -46,6 +53,7 @@ public final class ProfileRecord {
         self.createdAt = createdAt
         self.isPINProtected = isPINProtected
         self.sortIndex = sortIndex
+        self.dashboardLayoutJSON = dashboardLayoutJSON
         self.trackers = []
         self.loginDays = []
         self.schedules = []
@@ -78,6 +86,25 @@ public final class ProfileRecord {
     }
 
     /// Copies mutable fields across. `id` and `createdAt` are never reassigned.
+    /// The stored layout, falling back to the default when absent or unreadable.
+    ///
+    /// A layout that fails to decode — an older build, a hand-edited store —
+    /// must not take the dashboard down with it.
+    public var dashboardLayout: [DashboardCard] {
+        get {
+            guard let dashboardLayoutJSON,
+                  let data = dashboardLayoutJSON.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([DashboardCard].self, from: data),
+                  !decoded.isEmpty
+            else { return DashboardCard.defaultLayout }
+            return decoded
+        }
+        set {
+            dashboardLayoutJSON = (try? JSONEncoder().encode(newValue))
+                .flatMap { String(data: $0, encoding: .utf8) }
+        }
+    }
+
     public func apply(_ profile: Profile) {
         name = profile.name
         colorHex = profile.colorHex

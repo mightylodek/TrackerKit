@@ -11,6 +11,8 @@ public struct ChartGalleryView: View {
     private let store: TrackerStore
 
     @State private var section: Section
+    @State private var pendingKind: DashboardCard.Kind?
+    @State private var addedKind: DashboardCard.Kind?
 
     public enum Section: String, CaseIterable, Identifiable {
         case timeSeries = "Time series"
@@ -126,6 +128,29 @@ public struct ChartGalleryView: View {
         .background(theme.plane)
         .navigationTitle("Visual gallery")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $pendingKind) { kind in
+            TrackerPickerView(store: store, kind: kind) { tracker in
+                store.addDashboardCard(DashboardCard(kind: kind, trackerID: tracker.id))
+                addedKind = kind
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let addedKind {
+                Label("\(addedKind.displayName) added to your dashboard", systemImage: "checkmark.circle.fill")
+                    .font(theme.typography.labelEmphasis)
+                    .foregroundStyle(theme.textPrimary)
+                    .padding(.horizontal, theme.spacing.lg)
+                    .padding(.vertical, theme.spacing.sm)
+                    .trackerControlSurface(shape: theme.radii.actionShape)
+                    .padding(.bottom, 90)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task(id: addedKind) {
+                        try? await Task.sleep(for: .seconds(2.5))
+                        self.addedKind = nil
+                    }
+            }
+        }
+        .animation(theme.motion.snappyAnimation, value: addedKind)
     }
 
     private var sectionPicker: some View {
@@ -166,7 +191,8 @@ public struct ChartGalleryView: View {
     private var timeSeriesSection: some View {
         galleryCard(
             "Area chart",
-            "Volume over time. The mass under the curve is the message."
+            "Volume over time. The mass under the curve is the message.",
+            addable: .areaChart
         ) {
             TrackerAreaChart(
                 values: dailyValues,
@@ -187,7 +213,8 @@ public struct ChartGalleryView: View {
 
         galleryCard(
             "Line chart with moving average",
-            "The level, not the volume. The thick line is a 7-day average."
+            "The level, not the volume. The thick line is a 7-day average.",
+            addable: .lineChart
         ) {
             TrackerLineChart(
                 values: dailyValues,
@@ -256,7 +283,8 @@ public struct ChartGalleryView: View {
     private var goalsSection: some View {
         galleryCard(
             "Period bars with stoplight",
-            "Each period against the goal that was in force then. The dashed line steps when the target changed."
+            "Each period against the goal that was in force then. The dashed line steps when the target changed.",
+            addable: .periodBars
         ) {
             TrackerPeriodBarChart(
                 snapshots: weeklyHistory,
@@ -267,14 +295,16 @@ public struct ChartGalleryView: View {
 
         galleryCard(
             "Bullet charts",
-            "The densest honest way to show many goals at once. Tick is the target; the wash is the projection."
+            "The densest honest way to show many goals at once. Tick is the target; the wash is the projection.",
+            addable: .bullets
         ) {
             BulletChartList(trackers: store.activeTrackers, snapshots: snapshots)
         }
 
         galleryCard(
             "Stoplight rollup",
-            "One bar, every goal. Icon and word carry the status, not just color."
+            "One bar, every goal. Icon and word carry the status, not just color.",
+            addable: .stoplightRollup
         ) {
             StoplightSummaryBar(snapshots: snapshots)
         }
@@ -298,7 +328,8 @@ public struct ChartGalleryView: View {
 
         galleryCard(
             "Progress replay",
-            "History drawing itself, with goal changes called out as they happen."
+            "History drawing itself, with goal changes called out as they happen.",
+            addable: .replay
         ) {
             ProgressReplayView(
                 snapshots: weeklyHistory,
@@ -311,7 +342,7 @@ public struct ChartGalleryView: View {
 
     @ViewBuilder
     private var ringsSection: some View {
-        galleryCard("Activity rings", "Overshoot draws a second lap instead of capping.") {
+        galleryCard("Activity rings", "Overshoot draws a second lap instead of capping.", addable: .rings) {
             ProgressRingsView(rings: ringData, size: 210) {
                 VStack(spacing: -2) {
                     Text("\(snapshots.filter { $0.status == .green }.count)")
@@ -372,7 +403,8 @@ public struct ChartGalleryView: View {
     private var calendarsSection: some View {
         galleryCard(
             "Contribution heatmap",
-            "One hue, light to dark. No-entry days are outlined, never the palest step."
+            "One hue, light to dark. No-entry days are outlined, never the palest step.",
+            addable: .heatmap
         ) {
             HeatmapCalendarView(
                 values: longDailyValues,
@@ -381,7 +413,7 @@ public struct ChartGalleryView: View {
             )
         }
 
-        galleryCard("Streak card", "The chain, the number, and the nudge.") {
+        galleryCard("Streak card", "The chain, the number, and the nudge.", addable: .streak) {
             StreakCard(
                 streak: store.loginStreak(),
                 days: store.streaks.activityFlags(days: store.loginDays.map(\.day), dayCount: 14),
@@ -403,7 +435,8 @@ public struct ChartGalleryView: View {
     private var dimensionalSection: some View {
         galleryCard(
             "Weekday × week",
-            "Where rhythm hides. Native Chart3D on iOS 26, a hand-rolled projection below it. Drag to rotate either way."
+            "Where rhythm hides. Native Chart3D on iOS 26, a hand-rolled projection below it. Drag to rotate either way.",
+            addable: .rhythm3D
         ) {
             Tracker3DChart(
                 data: .weekdayByWeek(values: longDailyValues, unit: primaryTracker?.unit ?? ""),
@@ -494,14 +527,54 @@ public struct ChartGalleryView: View {
             }
     }
 
+    /// A gallery entry, with the means to put it on the dashboard.
+    ///
+    /// The gallery was a showroom with no way to take anything home — you could
+    /// admire the consistency calendar and then had to come back here every time
+    /// you wanted to look at it. `addable` is what makes it a catalogue.
     private func galleryCard<Content: View>(
         _ title: String,
         _ note: String,
+        addable: DashboardCard.Kind? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         TrackerCard(title: title, subtitle: note) {
-            content()
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                content()
+
+                if let addable {
+                    addToDashboardButton(for: addable)
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private func addToDashboardButton(for kind: DashboardCard.Kind) -> some View {
+        let alreadyOn = kind.isSingleton
+            && store.dashboardLayout.contains { $0.kind == kind }
+
+        Button {
+            guard !alreadyOn else { return }
+            if kind.needsTracker {
+                pendingKind = kind
+            } else {
+                store.addDashboardCard(DashboardCard(kind: kind))
+                addedKind = kind
+            }
+        } label: {
+            Label(
+                alreadyOn ? "On your dashboard" : "Add to dashboard",
+                systemImage: alreadyOn ? "checkmark" : "plus"
+            )
+            .font(theme.typography.labelEmphasis)
+            .foregroundStyle(alreadyOn ? theme.textMuted : theme.accent)
+            .padding(.vertical, theme.spacing.xs)
+            .frame(minHeight: theme.metrics.minimumTouchTarget)
+        }
+        .buttonStyle(.plain)
+        .disabled(alreadyOn)
+        .accessibilityIdentifier("gallery.add.\(kind.rawValue)")
     }
 }
 

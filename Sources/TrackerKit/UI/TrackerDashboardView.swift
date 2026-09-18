@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// The home screen: hero, rollup, and every tracker with one-tap logging.
+/// The home screen.
 ///
-/// Ordering is deliberate. Trackers that need attention float up, met goals sink.
-/// A dashboard sorted by creation date makes the user do the scanning that the
-/// software should have done for them.
+/// Composed from the profile's own ``DashboardCard`` layout rather than a fixed
+/// arrangement, so the visuals in the gallery can actually be put here. Two kids
+/// sharing an iPad get genuinely different dashboards.
 public struct TrackerDashboardView: View {
     @Environment(\.trackerTheme) private var theme
 
@@ -12,9 +12,204 @@ public struct TrackerDashboardView: View {
     private let session: ProfileSession
     private let showsHeroStyleSwitcher: Bool
 
-    @State private var heroStyle: HeroStyle
     @State private var isAddingTracker = false
+    @State private var isCustomising = false
     @State private var loggingTracker: Tracker?
+
+    public init(
+        store: TrackerStore,
+        session: ProfileSession,
+        showsHeroStyleSwitcher: Bool = false
+    ) {
+        self.store = store
+        self.session = session
+        self.showsHeroStyleSwitcher = showsHeroStyleSwitcher
+    }
+
+    /// Cards that can actually be drawn — one pointing at a deleted tracker is
+    /// skipped rather than rendering an empty frame.
+    private var cards: [DashboardCard] {
+        store.dashboardLayout.filter { store.canRender($0) }
+    }
+
+    public var body: some View {
+        ScrollView {
+            LazyVStack(spacing: theme.spacing.sectionGap) {
+                ForEach(cards) { card in
+                    DashboardCardView(
+                        card: card,
+                        store: store,
+                        session: session,
+                        showsHeroStyleSwitcher: showsHeroStyleSwitcher,
+                        onLog: quickLog,
+                        onDetailedLog: { loggingTracker = $0 }
+                    )
+                    .padding(.horizontal, theme.spacing.screenMargin)
+                }
+
+                if store.activeTrackers.isEmpty {
+                    emptyState
+                        .padding(.horizontal, theme.spacing.screenMargin)
+                }
+
+                footerActions
+                    .padding(.horizontal, theme.spacing.screenMargin)
+            }
+            .padding(.vertical)
+            // Clearance for the floating tab bar. Without it the last rows sit
+            // permanently underneath it and their quick-log buttons cannot be
+            // tapped at all — the bar is ~83pt and content scrolls beneath it.
+            .padding(.bottom, theme.spacing.xxl * 2)
+        }
+        .background(theme.plane)
+        .trackerUndoBar(store: store)
+        .navigationTitle(store.activeProfile?.name ?? "Tracker")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("Add tracker", systemImage: "plus") { isAddingTracker = true }
+                    Button("Customise dashboard", systemImage: "square.grid.2x2") {
+                        isCustomising = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityIdentifier("dashboard.menu")
+            }
+        }
+        .sheet(isPresented: $isAddingTracker) {
+            TrackerEditorView(store: store, tracker: nil)
+        }
+        .sheet(isPresented: $isCustomising) {
+            DashboardEditorView(store: store)
+        }
+        .sheet(item: $loggingTracker) { tracker in
+            LogEntryView(tracker: tracker, store: store, session: session)
+        }
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("Nothing tracked yet", systemImage: "target")
+        } description: {
+            Text("Add the first habit or goal for \(store.activeProfile?.name ?? "this profile").")
+        } actions: {
+            Button("Add tracker") { isAddingTracker = true }
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var footerActions: some View {
+        HStack(spacing: theme.spacing.md) {
+            Button {
+                isAddingTracker = true
+            } label: {
+                Label("Add tracker", systemImage: "plus")
+                    .font(theme.typography.heading)
+                    .foregroundStyle(theme.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, theme.spacing.md)
+                    .background {
+                        theme.radii.controlShape
+                            .stroke(theme.accent.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    }
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                isCustomising = true
+            } label: {
+                Image(systemName: "square.grid.2x2")
+                    .font(theme.typography.heading)
+                    .foregroundStyle(theme.textSecondary)
+                    .trackerTouchTarget(52)
+                    .background {
+                        theme.radii.controlShape.stroke(theme.border, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Customise dashboard")
+            .accessibilityIdentifier("dashboard.customise")
+        }
+    }
+
+    private func quickLog(_ tracker: Tracker) {
+        if tracker.kind == .checkbox {
+            store.toggle(trackerID: tracker.id)
+        } else {
+            store.log(trackerID: tracker.id)
+        }
+        session.touch()
+        session.publishWidgets()
+    }
+}
+
+// MARK: - HeroCardSection
+
+/// The hero, with the demo's style switcher optionally attached.
+public struct HeroCardSection: View {
+    @Environment(\.trackerTheme) private var theme
+
+    private let store: TrackerStore
+    private let showsSwitcher: Bool
+    @State private var style: HeroStyle
+
+    public init(style: HeroStyle, store: TrackerStore, showsSwitcher: Bool) {
+        self.store = store
+        self.showsSwitcher = showsSwitcher
+        _style = State(initialValue: style)
+    }
+
+    private var snapshots: [ProgressSnapshot] { store.currentProgressAll() }
+
+    private var headlineTracker: Tracker? {
+        let byID = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.trackerID, $0) })
+        return store.activeTrackers
+            .filter { byID[$0.id]?.goal != nil }
+            .max { (byID[$0.id]?.status ?? .neutral) < (byID[$1.id]?.status ?? .neutral) }
+    }
+
+    public var body: some View {
+        VStack(spacing: theme.spacing.sm) {
+            HeroSectionView(
+                style: style,
+                profile: store.activeProfile,
+                trackers: store.activeTrackers,
+                snapshots: snapshots,
+                loginStreak: store.loginStreak(),
+                streakDays: store.streaks.activityFlags(
+                    days: store.loginDays.map(\.day), dayCount: 14
+                ),
+                headlineTracker: headlineTracker,
+                headlineValues: headlineTracker.map {
+                    store.dailyValues(for: $0.id, dayCount: 30)
+                } ?? []
+            )
+
+            if showsSwitcher {
+                Picker("Hero style", selection: $style.animation(theme.motion.snappyAnimation)) {
+                    ForEach(HeroStyle.allCases, id: \.self) { option in
+                        Text(option.rawValue.capitalized).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+    }
+}
+
+// MARK: - TrackerListSection
+
+/// Every tracker in one container, with sorting and the archived toggle.
+public struct TrackerListSection: View {
+    @Environment(\.trackerTheme) private var theme
+
+    private let store: TrackerStore
+    private let session: ProfileSession
+    private let onLog: (Tracker) -> Void
+    private let onDetailedLog: (Tracker) -> Void
+
     @State private var showArchived = false
     @State private var sortMode: SortMode = .attention
 
@@ -22,34 +217,23 @@ public struct TrackerDashboardView: View {
         case attention = "Needs attention"
         case custom = "My order"
         case name = "Name"
-
         public var id: String { rawValue }
     }
 
-    /// - Parameter showsHeroStyleSwitcher: puts a live hero-style picker on the
-    ///   screen. Off by default — it is a showcase control, and shipping one in
-    ///   a production dashboard reads as an unfinished setting rather than a
-    ///   feature. The demo app turns it on.
     public init(
         store: TrackerStore,
         session: ProfileSession,
-        heroStyle: HeroStyle = .rings,
-        showsHeroStyleSwitcher: Bool = false
+        onLog: @escaping (Tracker) -> Void,
+        onDetailedLog: @escaping (Tracker) -> Void
     ) {
         self.store = store
         self.session = session
-        self.showsHeroStyleSwitcher = showsHeroStyleSwitcher
-        _heroStyle = State(initialValue: heroStyle)
-    }
-
-    // MARK: Data
-
-    private var snapshots: [ProgressSnapshot] {
-        store.currentProgressAll()
+        self.onLog = onLog
+        self.onDetailedLog = onDetailedLog
     }
 
     private var snapshotsByID: [UUID: ProgressSnapshot] {
-        Dictionary(uniqueKeysWithValues: snapshots.map { ($0.trackerID, $0) })
+        Dictionary(uniqueKeysWithValues: store.currentProgressAll().map { ($0.trackerID, $0) })
     }
 
     private var visibleTrackers: [Tracker] {
@@ -71,128 +255,29 @@ public struct TrackerDashboardView: View {
         }
     }
 
-    private var loginStreak: StreakSummary { store.loginStreak() }
-
-    private var streakDays: [(date: Date, isActive: Bool)] {
-        store.streaks.activityFlags(days: store.loginDays.map(\.day), dayCount: 14)
-    }
-
-    private var headlineTracker: Tracker? {
-        // The one most worth featuring: worst status that still has a goal.
-        let byID = snapshotsByID
-        return store.activeTrackers
-            .filter { byID[$0.id]?.goal != nil }
-            .max { lhs, rhs in
-                (byID[lhs.id]?.status ?? .neutral) < (byID[rhs.id]?.status ?? .neutral)
-            }
-    }
-
     public var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 18) {
-                hero
-                    .padding(.horizontal)
-
-                if !snapshots.isEmpty {
-                    TrackerCard(title: "Where everything stands") {
-                        StoplightSummaryBar(snapshots: snapshots)
-                    }
-                    .padding(.horizontal)
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            HStack {
+                Picker("Sort", selection: $sortMode.animation(theme.motion.snappyAnimation)) {
+                    ForEach(SortMode.allCases) { mode in Text(mode.rawValue).tag(mode) }
                 }
-
-                controls
-                    .padding(.horizontal)
-
-                if !visibleTrackers.isEmpty {
-                    trackerList
-                        .padding(.horizontal, theme.spacing.screenMargin)
-                }
-
-                if visibleTrackers.isEmpty {
-                    emptyState
-                        .padding(.horizontal)
-                }
-
-                addButton
-                    .padding(.horizontal)
-                    .padding(.top, 4)
-            }
-            .padding(.vertical)
-            // Clearance for the floating tab bar. Without it the last rows sit
-            // permanently underneath it and their quick-log buttons cannot be
-            // tapped at all — the bar is ~83pt and content scrolls beneath it.
-            .padding(.bottom, theme.spacing.xxl * 2)
-        }
-        .background(theme.plane)
-        .trackerUndoBar(store: store)
-        .navigationTitle(store.activeProfile?.name ?? "Tracker")
-        .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $isAddingTracker) {
-            TrackerEditorView(store: store, tracker: nil)
-        }
-        .sheet(item: $loggingTracker) { tracker in
-            LogEntryView(tracker: tracker, store: store, session: session)
-        }
-    }
-
-    // MARK: Hero
-
-    private var hero: some View {
-        VStack(spacing: 10) {
-            HeroSectionView(
-                style: heroStyle,
-                profile: store.activeProfile,
-                trackers: store.activeTrackers,
-                snapshots: snapshots,
-                loginStreak: loginStreak,
-                streakDays: streakDays,
-                headlineTracker: headlineTracker,
-                headlineValues: headlineTracker.map {
-                    store.dailyValues(for: $0.id, dayCount: 30)
-                } ?? []
-            )
-
-            if showsHeroStyleSwitcher {
-                Picker("Hero style", selection: $heroStyle.animation(theme.motion.snappyAnimation)) {
-                    ForEach(HeroStyle.allCases, id: \.self) { style in
-                        Text(style.rawValue.capitalized).tag(style)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-        }
-    }
-
-    // MARK: Controls
-
-    private var controls: some View {
-        HStack {
-            Picker("Sort", selection: $sortMode.animation(theme.motion.snappyAnimation)) {
-                ForEach(SortMode.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.menu)
-            .font(theme.typography.subheadline)
-
-            Spacer()
-
-            Toggle("Archived", isOn: $showArchived.animation())
-                .toggleStyle(.button)
+                .pickerStyle(.menu)
                 .font(theme.typography.subheadline)
+
+                Spacer()
+
+                Toggle("Archived", isOn: $showArchived.animation())
+                    .toggleStyle(.button)
+                    .font(theme.typography.subheadline)
+            }
+
+            if !visibleTrackers.isEmpty {
+                list
+            }
         }
-        .tint(theme.accent)
     }
 
-    // MARK: Tracker list
-
-    /// One container, hairline separators, no per-row shadow.
-    ///
-    /// The previous version gave every tracker its own elevated card, which at
-    /// eight trackers turned the dashboard into a stack of floating rectangles
-    /// competing with the hero. A list of things is a list, and drawing it as one
-    /// leaves the hero as the only object on the screen asking for attention.
-    private var trackerList: some View {
+    private var list: some View {
         VStack(spacing: 0) {
             ForEach(Array(visibleTrackers.enumerated()), id: \.element.id) { index, tracker in
                 // The link and the quick-log button are siblings, never nested.
@@ -207,30 +292,26 @@ public struct TrackerDashboardView: View {
                             sparkline: store.dailyValues(for: tracker.id, dayCount: 21),
                             isGrouped: true,
                             showsLogButton: false,
-                            onQuickLog: { quickLog(tracker) },
-                            onDetailedLog: { loggingTracker = tracker }
+                            onQuickLog: { onLog(tracker) },
+                            onDetailedLog: { onDetailedLog(tracker) }
                         )
                     }
                     .buttonStyle(.plain)
-                    // The row's own label aggregates its children, so this is
-                    // the reliable handle for assertions — identifiers on Text
-                    // inside a Button label get dropped.
                     .accessibilityIdentifier("row.\(tracker.title)")
 
                     TrackerQuickLogButton(
                         tracker: tracker,
                         snapshot: snapshotsByID[tracker.id],
-                        onQuickLog: { quickLog(tracker) },
+                        onQuickLog: { onLog(tracker) },
                         onLogAmount: { amount in
                             store.log(trackerID: tracker.id, value: amount)
                             session.touch()
                             session.publishWidgets()
                         },
-                        onDetailedLog: { loggingTracker = tracker }
+                        onDetailedLog: { onDetailedLog(tracker) }
                     )
                     .padding(.trailing, theme.spacing.cardPadding)
                 }
-                .staggeredAppear(index: min(index, 8))
 
                 if index < visibleTrackers.count - 1 {
                     Divider()
@@ -241,55 +322,6 @@ public struct TrackerDashboardView: View {
         }
         .clipShape(theme.radii.cardShape)
         .trackerCardSurface()
-    }
-
-    // MARK: Empty and add
-
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "target")
-                .font(theme.typography.display(.largeTitle))
-                .foregroundStyle(theme.textMuted)
-            Text("Nothing tracked yet")
-                .font(theme.typography.heading)
-                .foregroundStyle(theme.textPrimary)
-            Text("Add the first habit or goal for \(store.activeProfile?.name ?? "this profile").")
-                .font(theme.typography.callout)
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-    }
-
-    private var addButton: some View {
-        Button {
-            isAddingTracker = true
-        } label: {
-            Label("Add tracker", systemImage: "plus")
-                .font(theme.typography.heading)
-                .foregroundStyle(theme.accent)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background {
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(
-                            theme.accent.opacity(0.5),
-                            style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])
-                        )
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func quickLog(_ tracker: Tracker) {
-        if tracker.kind == .checkbox {
-            store.toggle(trackerID: tracker.id)
-        } else {
-            store.log(trackerID: tracker.id)
-        }
-        session.touch()
-        session.publishWidgets()
     }
 }
 

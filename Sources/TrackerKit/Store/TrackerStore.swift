@@ -30,6 +30,8 @@ public final class TrackerStore {
     public private(set) var loginDays: [LoginDay] = []
     /// Export schedules for the active profile.
     public private(set) var schedules: [ExportSchedule] = []
+    /// The active profile's dashboard composition, in display order.
+    public private(set) var dashboardLayout: [DashboardCard] = DashboardCard.defaultLayout
 
     /// Whose data is currently loaded. Setting it reloads everything below it.
     public var activeProfileID: UUID? {
@@ -171,6 +173,7 @@ public final class TrackerStore {
             entries = []
             loginDays = []
             schedules = []
+            dashboardLayout = DashboardCard.defaultLayout
             return
         }
 
@@ -179,8 +182,11 @@ public final class TrackerStore {
             entries = []
             loginDays = []
             schedules = []
+            dashboardLayout = DashboardCard.defaultLayout
             return
         }
+
+        dashboardLayout = record.dashboardLayout
 
         trackers = record.trackers
             .map(\.value)
@@ -276,6 +282,10 @@ public final class TrackerStore {
 
         guard !isBatching else { return }
         save()
+        // A bulk operation must not leave an undo offer behind. Seeding sample
+        // data logged ~1,100 entries and left "Added 2 glasses · Undo" on screen
+        // for something the user never did.
+        lastAction = nil
         loadProfiles()
         reloadProfileScopedData()
     }
@@ -581,6 +591,47 @@ public final class TrackerStore {
         context.delete(record)
         save()
         reloadProfileScopedData()
+    }
+
+    // MARK: - Dashboard layout
+
+    /// Replaces the active profile's dashboard composition.
+    public func setDashboardLayout(_ layout: [DashboardCard]) {
+        guard let id = activeProfileID, let record = profileRecord(id) else { return }
+        record.dashboardLayout = layout
+        save()
+        reloadProfileScopedData()
+    }
+
+    /// Appends a card, ignoring duplicates of anything only one of which makes
+    /// sense.
+    public func addDashboardCard(_ card: DashboardCard) {
+        var layout = dashboardLayout
+        if card.kind.isSingleton, layout.contains(where: { $0.kind == card.kind }) { return }
+        layout.append(card)
+        setDashboardLayout(layout)
+    }
+
+    public func removeDashboardCard(id: UUID) {
+        setDashboardLayout(dashboardLayout.filter { $0.id != id })
+    }
+
+    public func moveDashboardCards(from source: IndexSet, to destination: Int) {
+        var layout = dashboardLayout
+        layout.move(fromOffsets: source, toOffset: destination)
+        setDashboardLayout(layout)
+    }
+
+    public func resetDashboardLayout() {
+        setDashboardLayout(DashboardCard.defaultLayout)
+    }
+
+    /// Whether a card can be rendered — tracker-scoped cards whose tracker is
+    /// gone are skipped rather than crashing or drawing an empty frame.
+    public func canRender(_ card: DashboardCard) -> Bool {
+        guard card.kind.needsTracker else { return true }
+        guard let trackerID = card.trackerID else { return false }
+        return tracker(trackerID) != nil
     }
 
     // MARK: - Undo

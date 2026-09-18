@@ -558,3 +558,120 @@ struct UndoTests {
         #expect(store.entries(for: reps.id).isEmpty)
     }
 }
+
+// MARK: - Dashboard layout
+
+@MainActor
+struct DashboardLayoutTests {
+
+    private func makeStore() throws -> TrackerStore {
+        let container = try TrackerKitSchema.container(inMemory: true)
+        let store = TrackerStore(context: ModelContext(container))
+        let profile = store.addProfile(name: "A")
+        store.activeProfileID = profile.id
+        return store
+    }
+
+    @Test("A new profile gets the original composition")
+    func defaultLayout() throws {
+        let store = try makeStore()
+        #expect(store.dashboardLayout.map(\.kind) == [.hero, .stoplightRollup, .trackerList])
+    }
+
+    @Test("Cards can be added, reordered and removed")
+    func editing() throws {
+        let store = try makeStore()
+        let tracker = try #require(store.addTracker(title: "Water", kind: .count))
+
+        store.addDashboardCard(DashboardCard(kind: .heatmap, trackerID: tracker.id))
+        #expect(store.dashboardLayout.count == 4)
+        #expect(store.dashboardLayout.last?.kind == .heatmap)
+
+        store.moveDashboardCards(from: IndexSet(integer: 3), to: 0)
+        #expect(store.dashboardLayout.first?.kind == .heatmap)
+
+        let id = try #require(store.dashboardLayout.first?.id)
+        store.removeDashboardCard(id: id)
+        #expect(store.dashboardLayout.count == 3)
+    }
+
+    @Test("Layouts survive a reload — they're persisted, not in memory")
+    func persistence() throws {
+        let store = try makeStore()
+        let tracker = try #require(store.addTracker(title: "Water", kind: .count))
+        store.addDashboardCard(DashboardCard(kind: .heatmap, trackerID: tracker.id))
+
+        store.reload()
+        #expect(store.dashboardLayout.map(\.kind).contains(.heatmap))
+    }
+
+    @Test("Each profile keeps its own dashboard")
+    func perProfile() throws {
+        let store = try makeStore()
+        let first = try #require(store.profiles.first)
+        let second = store.addProfile(name: "B")
+
+        store.addDashboardCard(DashboardCard(kind: .rings))
+        #expect(store.dashboardLayout.map(\.kind).contains(.rings))
+
+        store.activeProfileID = second.id
+        #expect(!store.dashboardLayout.map(\.kind).contains(.rings), "B inherited A's dashboard")
+
+        store.activeProfileID = first.id
+        #expect(store.dashboardLayout.map(\.kind).contains(.rings), "A lost its dashboard")
+    }
+
+    @Test("Singleton cards can't be added twice")
+    func noDuplicateSingletons() throws {
+        let store = try makeStore()
+        store.addDashboardCard(DashboardCard(kind: .rings))
+        store.addDashboardCard(DashboardCard(kind: .rings))
+        #expect(store.dashboardLayout.filter { $0.kind == .rings }.count == 1)
+
+        #expect(!DashboardCard.addableKinds(given: store.dashboardLayout).contains(.rings))
+        // Tracker-scoped cards are fine more than once — two heatmaps for two
+        // different trackers is a reasonable dashboard.
+        #expect(DashboardCard.addableKinds(given: store.dashboardLayout).contains(.heatmap))
+    }
+
+    @Test("A card pointing at a deleted tracker is skipped, not fatal")
+    func orphanedCard() throws {
+        let store = try makeStore()
+        let tracker = try #require(store.addTracker(title: "Water", kind: .count))
+        store.addDashboardCard(DashboardCard(kind: .heatmap, trackerID: tracker.id))
+
+        store.deleteTracker(tracker.id)
+
+        let orphan = try #require(store.dashboardLayout.first { $0.kind == .heatmap })
+        #expect(store.canRender(orphan) == false)
+        // It stays in the layout so the editor can explain it, but never draws.
+        #expect(store.dashboardLayout.contains { $0.id == orphan.id })
+    }
+
+    @Test("Reset restores the default without touching data")
+    func reset() throws {
+        let store = try makeStore()
+        let tracker = try #require(store.addTracker(title: "Water", kind: .count))
+        store.log(trackerID: tracker.id)
+        store.addDashboardCard(DashboardCard(kind: .rings))
+
+        store.resetDashboardLayout()
+        #expect(store.dashboardLayout.map(\.kind) == [.hero, .stoplightRollup, .trackerList])
+        #expect(store.entries(for: tracker.id).count == 1, "Reset must not touch entries")
+    }
+}
+
+@MainActor
+struct BatchUndoTests {
+    @Test("A bulk import leaves nothing to undo")
+    func batchClearsUndo() throws {
+        let container = try TrackerKitSchema.container(inMemory: true)
+        let store = TrackerStore(context: ModelContext(container))
+        SampleData.seed(into: store)
+        store.reload()
+
+        // Seeding logs over a thousand entries; offering to undo one arbitrary
+        // entry the user never created is worse than offering nothing.
+        #expect(store.lastAction == nil)
+    }
+}

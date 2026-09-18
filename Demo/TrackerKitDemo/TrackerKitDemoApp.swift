@@ -40,7 +40,13 @@ struct TrackerKitDemoApp: App {
             // Glass is composited at display time and cannot be captured from an
             // offscreen render, so verifying the floating action bar means seeing
             // it on a real screen. Every type used here is public library API.
-            if let wanted = ProcessInfo.processInfo.environment["TKDEMO_DETAIL"] {
+            if ProcessInfo.processInfo.environment["TKDEMO_SEEDLAYOUT"] != nil {
+                // Screenshot aid: seeds a customised dashboard so the arranged
+                // layout can be captured without driving the editor by hand.
+                SeededLayoutDemo(
+                    theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"])
+                )
+            } else if let wanted = ProcessInfo.processInfo.environment["TKDEMO_DETAIL"] {
                 DirectDetail(
                     trackerName: wanted,
                     theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"])
@@ -73,6 +79,31 @@ struct TrackerKitDemoApp: App {
                     )
                 )
             }
+        }
+    }
+}
+
+/// A dashboard with extra cards already added.
+private struct SeededLayoutDemo: View {
+    let theme: TrackerTheme
+    @State private var store = TrackerStore.preview()
+
+    var body: some View {
+        let session = ProfileSession(store: store)
+        NavigationStack {
+            TrackerDashboardView(store: store, session: session)
+        }
+        .trackerTheme(theme)
+        .task {
+            session.select(store.profiles[0])
+            guard let focus = store.activeTrackers.first(where: { $0.title == "Focus Time" })
+                    ?? store.activeTrackers.first else { return }
+            store.setDashboardLayout([
+                DashboardCard(kind: .hero, heroStyle: .compact),
+                DashboardCard(kind: .heatmap, trackerID: focus.id),
+                DashboardCard(kind: .streak),
+                DashboardCard(kind: .trackerList)
+            ])
         }
     }
 }

@@ -122,6 +122,14 @@ env SIMCTL_CHILD_TKDEMO_PROFILE=Alex SIMCTL_CHILD_TKDEMO_TAB=gallery \
   Step 1 is adding `.watchOS(.v26)` and conditionalising four files; worth doing
   early so more iOS-only API doesn't creep into the shared layer.
 
+## Dashboard layout
+
+`DashboardCard` is the unit. Layouts live per profile as JSON on `ProfileRecord`
+(read and written whole, ordering is the point). Adding a visual means: a `Kind`
+case, a branch in `DashboardCardView`, and an `addable:` on its gallery entry.
+Tracker-scoped cards must tolerate their tracker being deleted — `canRender`
+decides, and the editor explains.
+
 ## Open items
 
 - Widget extension is built and working (`Demo/TrackerDashWidgets`), display-only.

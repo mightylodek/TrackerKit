@@ -44,6 +44,20 @@ TrackerDashboardView(store: store, session: session)
     .trackerTheme(.standard)
 ```
 
+### A dashboard you arrange
+
+The dashboard is an ordered list of ``DashboardCard`` values stored per profile,
+not a fixed composition — so two kids sharing an iPad get genuinely different
+home screens.
+
+Every visual in the gallery carries an **Add to dashboard** button, which was the
+point: a gallery you can only look at is a showroom, not a library. Tracker-scoped
+cards (calendar, trend, bars, replay, 3-D) ask which tracker they should show.
+
+Reorder and remove from **Customise** in the dashboard's menu. A card whose
+tracker was deleted is skipped when drawing and labelled in the editor rather than
+silently vanishing or crashing.
+
 ### Widgets
 
 The demo app ships a working widget extension (`Demo/TrackerDashWidgets`) in
