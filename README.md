@@ -453,10 +453,26 @@ What makes that hold:
 ## Testing
 
 ```bash
-xcodebuild -scheme TrackerKit -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+# Unit — 110 tests. Proves views DRAW.
+xcodebuild test -scheme TrackerKit \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+
+# UI — 15 tests. Proves taps LAND.
+cd Demo && xcodebuild test -project TrackerKitDemo.xcodeproj \
+  -scheme TrackerKitDemo \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:TrackerDashUITests
 ```
 
-75 tests in four groups:
+> `swift test` does **not** work here, and that isn't a bug to fix: it builds for
+> macOS, where `MessageUI` doesn't exist. Always go through `xcodebuild` with a
+> simulator destination.
+
+**For the full testing guide — demo routes that jump straight to any screen, what
+automation covers, and the exploratory pass that needs a person — see
+[`docs/TESTING.md`](docs/TESTING.md).**
+
+### Unit suite — 110 tests
 
 - **Engine tests** — period maths, pacing bands, streak rules, goal resolution,
   aggregation, trends, formatting. All against a fixed UTC calendar so results
@@ -465,11 +481,31 @@ xcodebuild -scheme TrackerKit -destination 'platform=iOS Simulator,name=iPhone 1
   building and escaping, widget snapshots.
 - **PIN tests** — verification, lockout ladder, salting, and an assertion that the
   PIN never appears in storage in the clear.
+- **Template tests** — what each built-in template creates, and that the dashboard
+  layout it seeds binds to the trackers it actually made.
 - **Render smoke tests** — every public visual forced through `ImageRenderer`,
   including degenerate input (empty, single-point, all-zero series) and an
   entirely empty profile. A view that compiles can still trap at runtime; this is
   what catches it. It already caught one: `RectangleMark` in `Chart3D` compiles
   against an `(x, y, z)` initializer and then traps demanding two extents.
+
+### UI suite — 15 tests
+
+The split is load-bearing, and it was bought the hard way. A quick-log button
+that silently did nothing passed the **entire** unit suite: every view drew
+correctly, and the tap was being swallowed by a `NavigationLink` wrapped around
+it. Unit tests prove a view draws. Only a launched app proves a tap lands.
+
+- **Logging** — quick-log changes the number, the detail add button survives
+  repeated taps without moving, undo reverses an accidental double-tap, and the
+  undo offer expires.
+- **Onboarding** — the wizard presents on an empty profile, a template creates its
+  trackers *and* a bound dashboard, deselecting actually subtracts, and skipping
+  doesn't loop.
+- **First launch** — the full cold start: welcome screen, profile creation, hand-off
+  to the wizard, populated dashboard.
+- **Accessibility audit** — Apple's auditor over the dashboard, gallery and wizard,
+  with four known categories suppressed so a red run means a new regression.
 
 ---
 
