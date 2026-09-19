@@ -156,6 +156,20 @@ public final class TrackerStore {
         reloadProfileScopedData()
     }
 
+    /// Whether any profile already owns this device.
+    ///
+    /// Reads through to the context so the answer is right mid-batch.
+    private var hasAnyOwner: Bool {
+        // The raw value is lifted out first: #Predicate can't reach an enum case
+        // through a key path.
+        let ownerRaw = ProfileRole.owner.rawValue
+        var descriptor = FetchDescriptor<ProfileRecord>(
+            predicate: #Predicate { $0.roleRaw == ownerRaw }
+        )
+        descriptor.fetchLimit = 1
+        return ((try? context.fetchCount(descriptor)) ?? 0) > 0
+    }
+
     private func loadProfiles() {
         guard !isBatching else { return }
         let descriptor = FetchDescriptor<ProfileRecord>(
@@ -300,11 +314,20 @@ public final class TrackerStore {
         role: ProfileRole = .member
     ) -> Profile {
         let palette = ChartPalette.standard
+        // Whoever sets the device up owns it. Without this a fresh install has
+        // no owner at all, so nobody can reset a forgotten PIN and the device is
+        // one forgotten 4-digit code away from a reinstall.
+        //
+        // Asked of the context rather than the cached `profiles`, which is stale
+        // inside `performBatch` — an earlier version read the cache and quietly
+        // promoted *every* seeded profile to owner, because the array was still
+        // empty on each pass through the loop.
+        let resolvedRole: ProfileRole = hasAnyOwner ? role : .owner
         let profile = Profile(
             name: name,
             colorHex: colorHex ?? palette.seriesHex(profiles.count),
             symbolName: symbolName,
-            role: role,
+            role: resolvedRole,
             sortIndex: profiles.count
         )
         let record = ProfileRecord(profile)

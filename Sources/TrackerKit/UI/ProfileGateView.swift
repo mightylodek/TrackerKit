@@ -22,19 +22,33 @@ public struct ProfileGateView<Content: View>: View {
     private let session: ProfileSession
     private let content: () -> Content
     private let allowsProfileCreation: Bool
+    private let deviceAuth: any DeviceOwnerAuthenticating
 
     @State private var isAddingProfile = false
+    @State private var deviceAuthFailed = false
 
     public init(
         store: TrackerStore,
         session: ProfileSession,
         allowsProfileCreation: Bool = true,
+        deviceAuth: (any DeviceOwnerAuthenticating)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.store = store
         self.session = session
         self.allowsProfileCreation = allowsProfileCreation
+        // Injected so a UI test can script it; a test bundle has no entitlement
+        // to authenticate anyone, so the real one can never run under test.
+        self.deviceAuth = deviceAuth ?? Self.defaultDeviceAuth
         self.content = content
+    }
+
+    private static var defaultDeviceAuth: any DeviceOwnerAuthenticating {
+        #if canImport(LocalAuthentication)
+        LocalDeviceOwnerAuth()
+        #else
+        StubDeviceOwnerAuth(isAvailable: false, succeeds: false)
+        #endif
     }
 
     public var body: some View {
@@ -162,6 +176,44 @@ public struct ProfileGateView<Content: View>: View {
         .background(theme.plane)
     }
 
+    /// An owner's way back in without their PIN.
+    ///
+    /// Offered only to owners: a member who forgets theirs is reset by an owner
+    /// from Settings. The device passcode belongs to the parent, so offering it
+    /// to a child's profile would hand them a key to their own lock.
+    @ViewBuilder
+    private func deviceOwnerRecovery(for profile: Profile) -> some View {
+        if profile.role == .owner, deviceAuth.isAvailable {
+            Button {
+                Task {
+                    let proved = await deviceAuth.authenticate(
+                        reason: "Unlock \(profile.name) without the PIN"
+                    )
+                    if proved {
+                        withAnimation(theme.motion.snappyAnimation) {
+                            session.enterAfterDeviceOwnerAuth()
+                        }
+                    } else {
+                        deviceAuthFailed = true
+                    }
+                }
+            } label: {
+                Label("Forgot PIN? Use device passcode", systemImage: "faceid")
+                    .font(theme.typography.subheadline)
+                    .foregroundStyle(theme.accent)
+            }
+            .padding(.top, theme.spacing.md)
+            .accessibilityIdentifier("pin.deviceOwnerRecovery")
+
+            if deviceAuthFailed {
+                Text("That didn't verify. Try again, or use the PIN.")
+                    .font(theme.typography.label)
+                    .foregroundStyle(theme.statusColor(.red))
+                    .padding(.top, theme.spacing.xs)
+            }
+        }
+    }
+
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 20)]
     }
@@ -176,6 +228,7 @@ public struct ProfileGateView<Content: View>: View {
                 onCancel: { session.cancelAuthentication() },
                 onSubmit: { .verified(session.submit(pin: $0)) }
             )
+            deviceOwnerRecovery(for: profile)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

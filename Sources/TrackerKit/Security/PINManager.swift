@@ -297,3 +297,21 @@ public enum PINError: Error, LocalizedError, Equatable {
         }
     }
 }
+
+// MARK: - PINAuthority
+
+/// Who may change a given profile's PIN.
+public enum PINAuthority: Sendable, Equatable {
+    /// Your own profile: set, change or clear it yourself.
+    case selfService
+    /// An owner acting on someone else. May *clear* a PIN so a new one can be
+    /// set, never read the existing one.
+    case owner
+    /// Not permitted.
+    case none
+
+    /// Whether this authority can clear a PIN without knowing it.
+    public var canReset: Bool { self == .owner }
+    /// Whether this authority can set or change a PIN directly.
+    public var canSet: Bool { self == .selfService }
+}

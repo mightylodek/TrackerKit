@@ -249,8 +249,30 @@ public struct TrackerKitSettingsView: View {
     private let store: TrackerStore
     private let session: ProfileSession
 
-    @State private var editingProfile: Profile?
-    @State private var isAddingProfile = false
+    /// Which profile editor is open, if any.
+    ///
+    /// One piece of state rather than two booleans, because two `.sheet`
+    /// modifiers on one view silently cancel each other out.
+    private enum ProfileSheet: Identifiable {
+        case edit(Profile)
+        case add
+
+        var id: String {
+            switch self {
+            case .edit(let profile): profile.id.uuidString
+            case .add: "add"
+            }
+        }
+
+        var profile: Profile? {
+            switch self {
+            case .edit(let profile): profile
+            case .add: nil
+            }
+        }
+    }
+
+    @State private var profileSheet: ProfileSheet?
     @State private var showResetConfirmation = false
 
     public init(store: TrackerStore, session: ProfileSession) {
@@ -262,8 +284,9 @@ public struct TrackerKitSettingsView: View {
         List {
             Section("Profiles") {
                 ForEach(store.profiles) { profile in
+                    let mayEdit = session.authority(over: profile) != .none
                     Button {
-                        editingProfile = profile
+                        profileSheet = .edit(profile)
                     } label: {
                         HStack(spacing: 12) {
                             ProfileAvatar(profile: profile, size: 34)
@@ -279,18 +302,29 @@ public struct TrackerKitSettingsView: View {
                             if profile.isPINProtected {
                                 Image(systemName: "lock.fill")
                                     .font(theme.typography.label)
-                                    .foregroundStyle(theme.textMuted)
+                                    .foregroundStyle(theme.textSecondary)
                             }
                         }
+                        // `.buttonStyle(.plain)` draws no background, so the gap
+                        // the Spacer opens up is not hit-testable and a tap in
+                        // the middle of the row falls straight through. The row
+                        // is the target, not just the words in it.
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    // A member opening someone else's editor could rename them,
+                    // change their colour, or switch their PIN off entirely.
+                    .disabled(!mayEdit)
+                    .opacity(mayEdit ? 1 : 0.5)
+                    .accessibilityIdentifier("settings.profile.\(profile.name)")
                 }
 
                 Button {
-                    isAddingProfile = true
+                    profileSheet = .add
                 } label: {
                     Label("Add profile", systemImage: "person.badge.plus")
                 }
+                .accessibilityIdentifier("settings.addProfile")
             }
 
             Section("Exports") {
@@ -311,9 +345,13 @@ public struct TrackerKitSettingsView: View {
             }
 
             Section {
+                // Wiping every profile — and every PIN with them — is an owner's
+                // call. A member could otherwise clear the device to get past a
+                // lock they couldn't open.
                 Button("Reset all data", role: .destructive) {
                     showResetConfirmation = true
                 }
+                .disabled(!session.activeProfileIsOwner)
             } footer: {
                 Text("Removes every profile, tracker, goal and entry on this device. PINs are cleared too.")
             }
@@ -329,11 +367,11 @@ public struct TrackerKitSettingsView: View {
             }
         }
         .navigationTitle("Settings")
-        .sheet(item: $editingProfile) { profile in
-            ProfileEditorView(store: store, session: session, profile: profile)
-        }
-        .sheet(isPresented: $isAddingProfile) {
-            ProfileEditorView(store: store, session: session, profile: nil)
+        // One sheet, not two. Stacking `.sheet(item:)` and `.sheet(isPresented:)`
+        // on the same view leaves only one of them working — tapping a profile
+        // here did nothing at all, silently, while "Add profile" worked fine.
+        .sheet(item: $profileSheet) { sheet in
+            ProfileEditorView(store: store, session: session, profile: sheet.profile)
         }
         .confirmationDialog(
             "Reset everything?",

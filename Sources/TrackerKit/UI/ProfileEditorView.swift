@@ -25,6 +25,25 @@ public struct ProfileEditorView: View {
     @State private var wantsPIN: Bool
     @State private var isSettingPIN = false
     @State private var showDeleteConfirmation = false
+    @State private var showPINResetConfirmation = false
+
+    /// Only an owner grants ownership.
+    ///
+    /// An unconditional picker let a member promote themselves, which would hand
+    /// them every other profile's data and the PIN reset button along with it.
+    private var canChangeRole: Bool {
+        // The first profile on a fresh device becomes the owner on save; there is
+        // nobody signed in yet to authorise it.
+        guard session.isActive else { return true }
+        return session.activeProfileIsOwner
+    }
+
+    /// What the signed-in profile is allowed to do to *this* one.
+    private var authority: PINAuthority {
+        // A profile being created has no holder yet, so its creator sets its PIN.
+        guard let existing else { return .selfService }
+        return session.authority(over: existing)
+    }
 
     public init(store: TrackerStore, session: ProfileSession, profile: Profile?) {
         self.store = store
@@ -70,28 +89,63 @@ public struct ProfileEditorView: View {
                 }
 
                 Section {
-                    Picker("Role", selection: $role) {
-                        ForEach(ProfileRole.allCases, id: \.self) { role in
-                            Text(role.displayName).tag(role)
+                    if canChangeRole {
+                        Picker("Role", selection: $role) {
+                            ForEach(ProfileRole.allCases, id: \.self) { role in
+                                Text(role.displayName).tag(role)
+                            }
                         }
+                    } else {
+                        LabeledContent("Role", value: role.displayName)
                     }
                 } footer: {
-                    Text("Owners can see every profile's data and change export settings. Members only see their own.")
+                    Text(canChangeRole
+                         ? "Owners can see every profile's data, change export settings, and reset a forgotten PIN. Members only see their own."
+                         : "Only an owner can change a role.")
                 }
 
                 Section {
-                    Toggle("Require a PIN", isOn: $wantsPIN)
+                    switch authority {
+                    case .selfService:
+                        Toggle("Require a PIN", isOn: $wantsPIN)
 
-                    if wantsPIN {
-                        Button(hasPIN ? "Change PIN" : "Set PIN") {
-                            isSettingPIN = true
+                        if wantsPIN {
+                            Button(hasPIN ? "Change PIN" : "Set PIN") {
+                                isSettingPIN = true
+                            }
+                            .disabled(isNew && !canSave)
+                            .accessibilityIdentifier("profile.setPIN")
                         }
-                        .disabled(isNew && !canSave)
+
+                    case .owner:
+                        // An owner restores access without ever learning the
+                        // code: clear it, and let its holder choose a new one.
+                        // Nothing here can read or set someone else's PIN.
+                        if hasPIN {
+                            Button("Reset PIN", role: .destructive) {
+                                showPINResetConfirmation = true
+                            }
+                            .accessibilityIdentifier("profile.resetPIN")
+                        } else {
+                            Text("No PIN set.")
+                                .foregroundStyle(theme.textSecondary)
+                        }
+
+                    case .none:
+                        Text("Only \(existing?.name ?? "this profile") can change this PIN.")
+                            .foregroundStyle(theme.textSecondary)
                     }
                 } header: {
                     Text("Privacy")
                 } footer: {
-                    Text("A 4-digit PIN keeps other people on this device out of this profile. It's a gate for a shared iPad, not encryption — don't store anything here you'd need protected from someone determined.")
+                    switch authority {
+                    case .owner:
+                        Text("As the device owner you can clear this PIN so \(existing?.name ?? "they") can set a new one. You can't see the current one.")
+                    case .none:
+                        Text("Ask an owner to reset it if it's been forgotten.")
+                    case .selfService:
+                        Text("A 4-digit PIN keeps other people on this device out of this profile. It's a gate for a shared iPad, not encryption — don't store anything here you'd need protected from someone determined.")
+                    }
                 }
 
                 if let existing, !isNew {
@@ -103,6 +157,21 @@ public struct ProfileEditorView: View {
                         Text("Deletes \(existing.name) and every tracker, entry and goal underneath. This cannot be undone.")
                     }
                 }
+            }
+            .confirmationDialog(
+                "Reset this PIN?",
+                isPresented: $showPINResetConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Reset PIN", role: .destructive) {
+                    if let existing {
+                        session.resetPIN(for: existing)
+                        wantsPIN = false
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("\(existing?.name ?? "This profile") will open without a PIN until a new one is set. Nothing else is removed.")
             }
             .navigationTitle(isNew ? "New profile" : "Edit profile")
             .navigationBarTitleDisplayMode(.inline)

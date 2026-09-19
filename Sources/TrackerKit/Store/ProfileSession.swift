@@ -94,6 +94,36 @@ public final class ProfileSession {
         return result
     }
 
+    /// Enters the profile awaiting a PIN, having proved the device owner some
+    /// other way.
+    ///
+    /// The recovery route for an owner who has forgotten their own PIN: the
+    /// device passcode is the parent's, so it authenticates exactly the person
+    /// entitled to get in. Clears any standing lockout — arriving here means the
+    /// owner has already proved themselves, and leaving them locked out after
+    /// that would be theatre.
+    ///
+    /// Returns `false` unless a PIN prompt is genuinely open for an owner, so it
+    /// cannot be used to walk into an arbitrary profile.
+    @discardableResult
+    public func enterAfterDeviceOwnerAuth() -> Bool {
+        guard case .authenticating(let id) = state,
+              store.profiles.first(where: { $0.id == id })?.role == .owner
+        else { return false }
+
+        pinManager.administrativeUnlock(for: id)
+        lastVerification = nil
+        enter(id)
+        return true
+    }
+
+    /// Whether the profile currently at the PIN prompt may recover with the
+    /// device passcode.
+    public var pendingProfileCanUseDeviceOwnerAuth: Bool {
+        guard case .authenticating(let id) = state else { return false }
+        return store.profiles.first(where: { $0.id == id })?.role == .owner
+    }
+
     /// Backs out of the PIN prompt to the picker.
     public func cancelAuthentication() {
         lastVerification = nil
@@ -173,10 +203,48 @@ public final class ProfileSession {
         pinManager.remainingAttempts(for: profileID)
     }
 
-    /// Parent override: clears a lockout without the PIN. Gate this behind an
-    /// owner-authenticated path in the host app.
+    /// Parent override: clears a lockout without the PIN.
+    ///
+    /// Check ``authority(over:)`` first — this call itself enforces nothing.
     public func administrativeUnlock(for profileID: UUID) {
         pinManager.administrativeUnlock(for: profileID)
         lastVerification = nil
+    }
+
+    // MARK: Authority
+
+    /// Who may change whose PIN.
+    ///
+    /// Before this existed, any signed-in profile could open Settings, tap any
+    /// other profile, and switch its PIN off — so a child could unlock their own
+    /// profile and disable a parent's. The recovery route and the bypass were the
+    /// same door.
+    public func authority(over profile: Profile) -> PINAuthority {
+        guard let activeID = activeProfileID else { return .none }
+        if profile.id == activeID { return .selfService }
+        guard let active = store.profiles.first(where: { $0.id == activeID }),
+              active.role == .owner
+        else { return .none }
+        return .owner
+    }
+
+    /// Whether the signed-in profile owns the device.
+    public var activeProfileIsOwner: Bool {
+        guard let activeID = activeProfileID else { return false }
+        return store.profiles.first(where: { $0.id == activeID })?.role == .owner
+    }
+
+    /// Clears another profile's PIN entirely, so its holder can set a new one.
+    ///
+    /// The recovery route for a forgotten PIN. Deliberately *clears* rather than
+    /// reveals: an owner can restore access without ever learning the code.
+    /// Returns `false` when the caller has no authority, which is the case worth
+    /// testing.
+    @discardableResult
+    public func resetPIN(for profile: Profile) -> Bool {
+        guard authority(over: profile) == .owner else { return false }
+        removePIN(for: profile)
+        pinManager.administrativeUnlock(for: profile.id)
+        return true
     }
 }
