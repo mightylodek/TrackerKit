@@ -14,6 +14,7 @@ final class AccessibilityAuditTests: XCTestCase {
     private func launch(_ env: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["TKDEMO_PROFILE"] = "Alex"
+        app.launchEnvironment["TKDEMO_INMEMORY"] = "1"
         for (k, v) in env { app.launchEnvironment[k] = v }
         app.launch()
         return app

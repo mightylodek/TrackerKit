@@ -6,6 +6,7 @@ final class TreeDump: XCTestCase {
     func testDumpTree() {
         let app = XCUIApplication()
         app.launchEnvironment["TKDEMO_PROFILE"] = "Alex"
+        app.launchEnvironment["TKDEMO_INMEMORY"] = "1"
         app.launch()
         _ = app.wait(for: .runningForeground, timeout: 20)
         sleep(6)

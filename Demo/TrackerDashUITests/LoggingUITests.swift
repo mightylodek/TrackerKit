@@ -19,6 +19,7 @@ final class LoggingUITests: XCTestCase {
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["TKDEMO_PROFILE"] = "Alex"
+        app.launchEnvironment["TKDEMO_INMEMORY"] = "1"
         app.launch()
         return app
     }

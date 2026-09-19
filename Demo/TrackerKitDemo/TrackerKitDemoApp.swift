@@ -71,10 +71,12 @@ struct TrackerKitDemoApp: App {
             } else {
                 TrackerKitRootView(
                 configuration: TrackerKitConfiguration(
-                    // In-memory so the demo starts from the same seeded state every
-                    // launch. Flip to `false` (and drop `seedSampleDataWhenEmpty`)
-                    // to get a real persistent store.
-                    inMemory: true,
+                    // On-disk by default. The demo ran in-memory for most of its
+                    // life, which meant the real SwiftData path — the one every
+                    // actual user is on — had never once executed. Automated runs
+                    // opt back into a clean slate with TKDEMO_INMEMORY=1; a device
+                    // gets the storage a shipped app would use.
+                    inMemory: ProcessInfo.processInfo.environment["TKDEMO_INMEMORY"] != nil,
                     // Shared container for the widget extension. Both the app and
                     // the widget declare this in their entitlements; without it
                     // the app runs fine and widgets simply never update, which
