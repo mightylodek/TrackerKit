@@ -1,3 +1,7 @@
+// `Chart3D` is iOS/macOS only — there is no watchOS implementation, and a
+// rotatable 3-D field would be meaningless at watch size regardless.
+#if os(iOS)
+
 import SwiftUI
 import Charts
 
@@ -414,3 +418,5 @@ private struct ProjectedBarField3D: View {
     }
     .padding()
 }
+
+#endif

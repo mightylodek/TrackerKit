@@ -457,6 +457,11 @@ What makes that hold:
 xcodebuild test -scheme TrackerKit \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
+# The same suite on watchOS — 109 of the 110 run there, which is what keeps the
+# shared core honest. Only the iOS-only screen catalog is excluded.
+xcodebuild test -scheme TrackerKit \
+  -destination 'platform=watchOS Simulator,name=Apple Watch Ultra 3 (49mm)'
+
 # UI — 15 tests. Proves taps LAND.
 cd Demo && xcodebuild test -project TrackerKitDemo.xcodeproj \
   -scheme TrackerKitDemo \

@@ -1,3 +1,11 @@
+// Mail and SMS composers are UIKit view controllers with no watchOS equivalent:
+// watchOS has no Mail or Messages app to hand a draft to. The whole file is
+// conditionalised rather than stubbed, so a watch target that tries to present a
+// composer fails to compile instead of silently doing nothing at runtime.
+//
+// The watch's export route is an open design question — see docs/WATCH.md.
+#if canImport(MessageUI)
+
 import SwiftUI
 import UIKit
 import MessageUI
@@ -338,3 +346,5 @@ public struct ExportDeliveryView: View {
         .padding(32)
     }
 }
+
+#endif

@@ -103,7 +103,9 @@ struct RenderSmokeTests {
         for size in [StreakBadge.Size.compact, .regular, .hero] {
             #expect(render(StreakBadge(streak: streak, size: size)) != nil)
         }
+        #if os(iOS)
         #expect(render(Tracker3DChart(values: daily, unit: "min", height: 300)) != nil)
+        #endif
     }
 
     @Test("Widgets render at all three sizes")
@@ -180,7 +182,9 @@ struct RenderSmokeTests {
             #expect(render(TrackerLineChart(values: values, name: "X")) != nil)
             #expect(render(HeatmapCalendarView(values: values)) != nil)
             #expect(render(SparklineView(dailyValues: values, color: .blue).frame(height: 30)) != nil)
+            #if os(iOS)
             #expect(render(Tracker3DChart(values: values, height: 200)) != nil)
+            #endif
         }
 
         #expect(render(TrackerStackedBarChart(series: [])) != nil)
@@ -200,8 +204,15 @@ struct RenderSmokeTests {
         store.activeProfileID = profile.id
         let session = ProfileSession(store: store)
 
+        #if os(iOS)
         #expect(render(TrackerDashboardView(store: store, session: session)) != nil)
         #expect(render(ChartGalleryView(store: store)) != nil)
         #expect(render(TrackerKitSettingsView(store: store, session: session)) != nil)
+        #else
+        // No assembled screens on watchOS yet — this still asserts the store and
+        // session build cleanly for a profile with nothing in it.
+        #expect(store.activeTrackers.isEmpty)
+        _ = session
+        #endif
     }
 }

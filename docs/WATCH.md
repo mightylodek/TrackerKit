@@ -1,6 +1,11 @@
 # watchOS — notes toward a standalone watch app
 
-Written during the display-widget build, 2026-09-18. **Nothing here is built.**
+Written during the display-widget build, 2026-09-18.
+
+> **Step 1 is done (2026-09-19).** The package declares `.watchOS(.v26)`, builds
+> for watchOS, and **109 of its 110 tests pass on an Apple Watch simulator.** The
+> core is portable — that is now measured, not assumed. Steps 2–4 below are still
+> unbuilt. See *What step 1 actually cost* before starting step 2.
 
 ## The requirement that changes everything
 
@@ -14,6 +19,44 @@ the streaks, and never syncs to anything.
 
 That reframes it from a UI port to a second first-class platform, and it should
 shape decisions now rather than being retrofitted.
+
+---
+
+## What step 1 actually cost
+
+The estimate below was close on the shared layer and wrong about the UI. The real
+shape of the work, for the record:
+
+| | Predicted | Actual |
+|---|---|---|
+| Shared files needing a watchOS path | 3–4 | **1** (`Color+Hex.swift`) |
+| Framework-gated files | 1 (`MessageUI`) | **1**, as predicted |
+| UI files needing exclusion | not considered | **15** — the whole `UI/` directory |
+| Charts needing exclusion | "triage later" | **1** (`Chart3DView`) |
+
+The surprise was that the UI layer had to come out wholesale rather than being
+patched. Twelve compile errors across five files — `Menu`, `.segmented`,
+`editMode`, `keyboardType`, `UIApplication` — but every one of them sat in a
+screen designed for a phone, so guarding individual call sites would have
+produced watchOS builds of views nobody should ever put on a watch. The whole of
+`Sources/TrackerKit/UI/` is now behind `#if os(iOS)`.
+
+`KeychainStore` needed no change, as predicted. `PDFReportRenderer` compiled
+untouched — `ImageRenderer` is available on watchOS after all.
+
+**The boundary is now a rule, not a coincidence:** anything under `UI/` is
+iOS-only and may use whatever it likes; anything under `Model/`, `Engine/`,
+`Store/`, `Theme/`, `Security/` and `Widgets/` must compile for both. The
+watchOS test run is what enforces it.
+
+```bash
+xcodebuild -scheme TrackerKit -destination 'platform=watchOS Simulator,name=Apple Watch Ultra 3 (49mm)' build
+xcodebuild test -scheme TrackerKit -destination 'platform=watchOS Simulator,name=Apple Watch Ultra 3 (49mm)'
+```
+
+One drift was found on the way in: `ExportSettingsView` had picked up
+`UIApplication.openSettingsURLString` since these notes were written — exactly
+the creep this step was meant to stop. A week cost one file.
 
 ---
 
@@ -87,13 +130,25 @@ exactly here.
 
 ## Suggested order, when we get to it
 
-1. Add `.watchOS(.v26)` and conditionalise the four files — purely mechanical,
-   and it proves the core is portable.
+1. ~~Add `.watchOS(.v26)` and conditionalise the four files.~~ **Done
+   2026-09-19.** Cost: one shared file changed, sixteen excluded.
 2. Build a standalone watch target with a single screen: today's trackers, tap
    to log.
 3. Add complications off the existing `WidgetSnapshot`.
 4. Only then consider whether profiles/PIN/export belong on the watch at all.
 
-Step 1 is worth doing early even if the watch app is far off, because it stops
-iOS-only API from creeping further into the shared layer. Every week it's
-deferred, the port gets slightly more expensive.
+Step 1 was worth doing early because it stops iOS-only API creeping further into
+the shared layer — and it had already cost one file in a week.
+
+**Before step 2**, two things need deciding, and they are product questions
+rather than engineering ones:
+
+- **Does a kid's watch have profiles at all?** The multi-profile model exists
+  because one iPad is shared. A personal watch is a single-user device. If the
+  answer is no, `ProfileSession` stays on iOS and the watch talks to
+  `TrackerStore` directly — which is simpler, and changes what step 2 looks like.
+- **How does a tracker get created with no phone in the house?** Title, goal,
+  cadence and unit is a lot of text entry at 45mm. The templates built for the
+  iOS wizard are the obvious answer: pick "Youth sport", get four trackers, never
+  type anything. That makes `TrackerTemplate` a watch asset, not just an
+  onboarding convenience.

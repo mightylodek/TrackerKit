@@ -1,3 +1,8 @@
+// iOS-only: this helper renders the phone screens through UIHostingController
+// and UIWindow, neither of which exists on watchOS. The screens it captures are
+// iOS-only too.
+#if os(iOS)
+
 import Testing
 import SwiftUI
 import SwiftData
@@ -248,3 +253,5 @@ struct ScreenshotCatalog {
         #expect(files.count >= 20)
     }
 }
+
+#endif

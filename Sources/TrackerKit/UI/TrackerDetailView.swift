@@ -1,3 +1,11 @@
+// iOS-only. These screens assume a phone or tablet canvas: navigation stacks,
+// menus, segmented pickers, keyboard types and edit modes that either don't
+// exist on watchOS or are the wrong interaction at 45mm.
+//
+// A watch app gets its own UI built on the same portable core (Model, Engine,
+// Store, Theme, Security), not these views shrunk down. See docs/WATCH.md.
+#if os(iOS)
+
 import SwiftUI
 
 /// One tracker in depth: current standing, a switchable chart, streaks, and the
@@ -544,3 +552,5 @@ public struct TrackerDetailView: View {
         TrackerDetailView(tracker: store.activeTrackers[1], store: store)
     }
 }
+
+#endif

@@ -4,7 +4,8 @@ import PackageDescription
 let package = Package(
     name: "TrackerKit",
     platforms: [
-        .iOS(.v26)
+        .iOS(.v26),
+        .watchOS(.v26)
     ],
     products: [
         .library(

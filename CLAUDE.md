@@ -7,7 +7,7 @@ picture; this file is the working context for changing it.
 
 ```
 tracker_library_ios/
-├── Package.swift              — SPM, tools 6.2, iOS 26+, Swift 5 language mode
+├── Package.swift              — SPM, tools 6.2, iOS 26+ / watchOS 26+, Swift 5 mode
 ├── Sources/TrackerKit/
 │   ├── Model/                 — value types, SwiftData records, enums, formatters
 │   ├── Engine/                — pure calculation: periods, progress, stoplight, streaks, trends
@@ -19,7 +19,7 @@ tracker_library_ios/
 │   ├── Hero/                  — hero sections, ProfileAvatar
 │   ├── Widgets/               — WidgetSnapshot, shared store, S/M/L views
 │   ├── Export/                — report model, 4 renderers, scheduler, composers
-│   └── UI/                    — assembled screens
+│   └── UI/                    — assembled screens (iOS-only, see rule 17)
 ├── Tests/TrackerKitTests/     — 110 tests
 ├── Demo/TrackerDashUITests/   — 17 UI tests (taps, not just draws)
 └── Demo/TrackerKitDemo.xcodeproj
@@ -79,12 +79,23 @@ Break these and things get subtly wrong rather than obviously broken.
    for floating actions and toolbars, `.trackerCardSurface()` for content. Glass
    on a content card defeats its sampling model and looks like mud.
 
+17. **`UI/` is iOS-only; everything else compiles for watchOS too.** Every file in
+   `Sources/TrackerKit/UI/` sits behind `#if os(iOS)`, as does `Chart3DView`.
+   `Model/`, `Engine/`, `Store/`, `Theme/`, `Security/`, `Charts/` and `Widgets/`
+   are shared and must build for both — the watchOS test run enforces it, so run
+   it before adding a UIKit call to the shared layer. A watch app gets its own
+   views on the same core, never these ones shrunk.
+
 ## Commands
 
 ```bash
-# Library
+# Library — iOS
 xcodebuild -scheme TrackerKit -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 xcodebuild -scheme TrackerKit -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+
+# Library — watchOS (guards the shared/iOS-only boundary; 109 of 110 tests run here)
+xcodebuild -scheme TrackerKit -destination 'platform=watchOS Simulator,name=Apple Watch Ultra 3 (49mm)' build
+xcodebuild test -scheme TrackerKit -destination 'platform=watchOS Simulator,name=Apple Watch Ultra 3 (49mm)' 
 
 # Demo app
 cd Demo && xcodebuild -project TrackerKitDemo.xcodeproj -scheme TrackerKitDemo \
@@ -120,8 +131,10 @@ env SIMCTL_CHILD_TKDEMO_PROFILE=Alex SIMCTL_CHILD_TKDEMO_TAB=gallery \
 - `docs/INTERACTIVE-WIDGETS.md` — what changes when a widget can write. Includes
   red-team prompts. **Goes through a blue/red team review before any code.**
 - `docs/WATCH.md` — standalone watchOS app (the kids have watches, not phones).
-  Step 1 is adding `.watchOS(.v26)` and conditionalising four files; worth doing
-  early so more iOS-only API doesn't creep into the shared layer.
+  **Step 1 is done**: the package builds and tests on watchOS. Step 2 is a watch
+  target with one screen, but two product questions come first — whether a
+  personal watch needs profiles at all, and how a tracker gets created with no
+  phone in the house (templates are the likely answer).
 
 ## Dashboard layout
 

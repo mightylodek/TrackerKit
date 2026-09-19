@@ -1,3 +1,11 @@
+// iOS-only. These screens assume a phone or tablet canvas: navigation stacks,
+// menus, segmented pickers, keyboard types and edit modes that either don't
+// exist on watchOS or are the wrong interaction at 45mm.
+//
+// A watch app gets its own UI built on the same portable core (Model, Engine,
+// Store, Theme, Security), not these views shrunk down. See docs/WATCH.md.
+#if os(iOS)
+
 import SwiftUI
 
 /// Create or edit a tracker and its goal.
@@ -331,3 +339,5 @@ public struct TrackerEditorView: View {
     let store = TrackerStore.preview()
     return TrackerEditorView(store: store, tracker: store.activeTrackers.first)
 }
+
+#endif

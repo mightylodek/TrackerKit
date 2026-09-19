@@ -1,3 +1,11 @@
+// iOS-only. These screens assume a phone or tablet canvas: navigation stacks,
+// menus, segmented pickers, keyboard types and edit modes that either don't
+// exist on watchOS or are the wrong interaction at 45mm.
+//
+// A watch app gets its own UI built on the same portable core (Model, Engine,
+// Store, Theme, Security), not these views shrunk down. See docs/WATCH.md.
+#if os(iOS)
+
 import SwiftUI
 
 /// The logging sheet. Shape follows the tracker kind — a checkbox gets one big
@@ -352,3 +360,5 @@ extension ProgressSnapshot {
     let tracker = store.activeTrackers.first { $0.kind == .count } ?? store.activeTrackers[0]
     return LogEntryView(tracker: tracker, store: store)
 }
+
+#endif

@@ -37,11 +37,18 @@ public extension Color {
     /// The palette ships *selected* dark steps rather than algorithmically
     /// lightening the light ones — dark mode is designed, not flipped.
     init(light: String, dark: String) {
+        #if os(watchOS)
+        // watchOS has no light appearance — the system is always dark, and there
+        // is no trait-based dynamic provider to resolve against. Taking the dark
+        // step is the right answer on that platform, not a degraded fallback.
+        self.init(hex: dark)
+        #else
         self.init(uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
                 ? UIColor(Color(hex: dark))
                 : UIColor(Color(hex: light))
         })
+        #endif
     }
 
     /// `#RRGGBB` round-trip, used when persisting a picked color.
