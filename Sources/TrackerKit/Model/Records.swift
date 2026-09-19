@@ -24,6 +24,7 @@ public final class ProfileRecord {
     /// whole, it is small, and ordering is the entire point — which a JSON array
     /// gives for free and a to-many relationship does not.
     public var dashboardLayoutJSON: String?
+    public var reportDefinitionsJSON: String?
 
     @Relationship(deleteRule: .cascade, inverse: \TrackerRecord.profile)
     public var trackers: [TrackerRecord]
@@ -43,7 +44,8 @@ public final class ProfileRecord {
         createdAt: Date = .now,
         isPINProtected: Bool = false,
         sortIndex: Int = 0,
-        dashboardLayoutJSON: String? = nil
+        dashboardLayoutJSON: String? = nil,
+        reportDefinitionsJSON: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -54,6 +56,7 @@ public final class ProfileRecord {
         self.isPINProtected = isPINProtected
         self.sortIndex = sortIndex
         self.dashboardLayoutJSON = dashboardLayoutJSON
+        self.reportDefinitionsJSON = reportDefinitionsJSON
         self.trackers = []
         self.loginDays = []
         self.schedules = []
@@ -101,6 +104,25 @@ public final class ProfileRecord {
         }
         set {
             dashboardLayoutJSON = (try? JSONEncoder().encode(newValue))
+                .flatMap { String(data: $0, encoding: .utf8) }
+        }
+    }
+
+    /// Saved custom reports, newest last.
+    ///
+    /// Same shape as the dashboard layout and for the same reasons: read and
+    /// written whole, nothing queries across them, and a definition that fails
+    /// to decode must not take the reports screen down with it.
+    public var reportDefinitions: [ReportDefinition] {
+        get {
+            guard let reportDefinitionsJSON,
+                  let data = reportDefinitionsJSON.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([ReportDefinition].self, from: data)
+            else { return [] }
+            return decoded
+        }
+        set {
+            reportDefinitionsJSON = (try? JSONEncoder().encode(newValue))
                 .flatMap { String(data: $0, encoding: .utf8) }
         }
     }

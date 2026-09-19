@@ -83,13 +83,23 @@ public enum ExportScheduler {
             "trackerkit.profileID": schedule.profileID.uuidString,
             "trackerkit.channel": schedule.channel.rawValue,
             "trackerkit.format": schedule.format.rawValue,
-            "trackerkit.lookbackDays": schedule.lookbackDays
+            "trackerkit.lookbackDays": schedule.lookbackDays,
+            // Carries the saved report through to the tap, so the composer opens
+            // with every choice already made rather than a blank form.
+            "trackerkit.reportDefinitionID": schedule.reportDefinitionID?.uuidString ?? ""
         ]
 
         var components = DateComponents()
-        components.weekday = schedule.weekday
         components.hour = schedule.hour
         components.minute = schedule.minute
+        // A weekday on a daily trigger would fire once a week, and a weekday on
+        // a monthly one is a different date every month. Only set what the
+        // frequency actually means.
+        switch schedule.frequency {
+        case .daily: break
+        case .weekly: components.weekday = schedule.weekday
+        case .monthly: components.day = 1
+        }
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
         let request = UNNotificationRequest(

@@ -108,6 +108,24 @@ public enum Formatters {
         return "\(dayMonth(interval.start)) – \(dayMonth(end))"
     }
 
+    /// "Fri 12 Sep" — a bucket label in a custom report.
+    ///
+    /// Carries the weekday because these reports are often *about* weekdays: a
+    /// Friday-to-Thursday week or a Mon–Fri filter is unreadable as bare dates.
+    public static func shortDay(_ date: Date) -> String {
+        date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+    }
+
+    /// "September 2026".
+    public static func monthYear(_ date: Date) -> String {
+        date.formatted(.dateTime.month(.wide).year())
+    }
+
+    /// "2026".
+    public static func year(_ date: Date) -> String {
+        date.formatted(.dateTime.year())
+    }
+
     /// Filename-safe stamp: "2026-09-17".
     public static func fileStamp(_ date: Date = .now) -> String {
         let formatter = DateFormatter()

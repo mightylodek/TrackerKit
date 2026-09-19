@@ -45,6 +45,12 @@ struct TrackerKitDemoApp: App {
                 EmptyProfileDemo(
                     theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"])
                 )
+            } else if ProcessInfo.processInfo.environment["TKDEMO_REPORTS"] != nil {
+                // Opens the custom reports list directly — it is three taps deep
+                // through Settings otherwise.
+                ReportsDemo(
+                    theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"])
+                )
             } else if ProcessInfo.processInfo.environment["TKDEMO_PINSETUP"] != nil {
                 // Opens PIN setup directly. Reaching it by hand is four taps deep
                 // in Settings, and the first-run bug lived in this flow.
@@ -129,6 +135,20 @@ private struct EmptyProfileDemo: View {
                 session.select(profile)
             }
         }
+    }
+}
+
+/// The custom reports list, opened directly.
+private struct ReportsDemo: View {
+    let theme: TrackerTheme
+
+    @State private var store = TrackerStore.preview()
+
+    var body: some View {
+        NavigationStack {
+            ReportListView(store: store)
+        }
+        .trackerTheme(theme)
     }
 }
 

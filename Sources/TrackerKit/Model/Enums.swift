@@ -364,3 +364,25 @@ public enum ProfileRole: String, Codable, Sendable, CaseIterable, Hashable {
         }
     }
 }
+
+// MARK: - ReportFrequency
+
+/// How often a scheduled report fires.
+public enum ReportFrequency: String, Codable, Sendable, CaseIterable, Hashable {
+    case daily
+    case weekly
+    case monthly
+
+    public var displayName: String {
+        switch self {
+        case .daily: "Every day"
+        case .weekly: "Every week"
+        case .monthly: "Every month"
+        }
+    }
+
+    /// Whether a weekday needs picking. A daily report has no weekday to choose,
+    /// and a monthly one runs on a date instead.
+    public var needsWeekday: Bool { self == .weekly }
+    public var needsDayOfMonth: Bool { self == .monthly }
+}

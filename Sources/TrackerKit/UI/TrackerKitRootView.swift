@@ -327,6 +327,15 @@ public struct TrackerKitSettingsView: View {
                 .accessibilityIdentifier("settings.addProfile")
             }
 
+            Section("Reports") {
+                NavigationLink {
+                    ReportListView(store: store)
+                } label: {
+                    Label("Custom reports", systemImage: "doc.text.magnifyingglass")
+                }
+                .accessibilityIdentifier("settings.customReports")
+            }
+
             Section("Exports") {
                 NavigationLink {
                     ExportSettingsView(store: store)

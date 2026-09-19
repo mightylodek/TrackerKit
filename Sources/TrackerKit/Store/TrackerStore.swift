@@ -686,6 +686,51 @@ public final class TrackerStore {
         activeProfileID != nil && trackers.isEmpty
     }
 
+    // MARK: - Custom reports
+
+    /// The active profile's saved reports.
+    public var reportDefinitions: [ReportDefinition] {
+        guard let id = activeProfileID, let record = profileRecord(id) else { return [] }
+        registerObservation()
+        return record.reportDefinitions
+    }
+
+    /// Adds or replaces a report definition, matched by id.
+    public func save(_ definition: ReportDefinition) {
+        guard let id = activeProfileID, let record = profileRecord(id) else { return }
+        var all = record.reportDefinitions
+        if let index = all.firstIndex(where: { $0.id == definition.id }) {
+            all[index] = definition
+        } else {
+            all.append(definition)
+        }
+        record.reportDefinitions = all
+        save()
+        reloadProfileScopedData()
+    }
+
+    public func deleteReport(_ definitionID: UUID) {
+        guard let id = activeProfileID, let record = profileRecord(id) else { return }
+        record.reportDefinitions.removeAll { $0.id == definitionID }
+        save()
+        reloadProfileScopedData()
+    }
+
+    /// Builds a saved report from live data.
+    ///
+    /// The store's job is fetching; the arithmetic belongs to
+    /// ``CustomReportEngine``, which stays pure so it can run on a watch.
+    public func buildReport(_ definition: ReportDefinition, now: Date = .now) -> CustomReport {
+        let engine = CustomReportEngine(calculator: calculator)
+        let wanted = Set(definition.trackerIDs)
+        let included = trackers.filter { wanted.contains($0.id) }
+        var byTracker: [UUID: [Entry]] = [:]
+        for tracker in included {
+            byTracker[tracker.id] = entries(for: tracker.id)
+        }
+        return engine.build(definition, trackers: included, entriesByTracker: byTracker, now: now)
+    }
+
     // MARK: - Dashboard layout
 
     /// Replaces the active profile's dashboard composition.

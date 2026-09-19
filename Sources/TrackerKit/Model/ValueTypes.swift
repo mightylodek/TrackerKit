@@ -294,9 +294,21 @@ public struct ExportSchedule: Identifiable, Codable, Sendable, Hashable {
     public var format: ReportFormat
     /// Email addresses or phone numbers, depending on `channel`.
     public var recipients: [String]
-    /// How many days of history each report covers.
+    /// How many days of history each report covers. Ignored when
+    /// ``reportDefinitionID`` is set — a saved report carries its own range.
     public var lookbackDays: Int
     public var lastDeliveredAt: Date?
+
+    /// How often this fires.
+    public var frequency: ReportFrequency
+
+    /// The saved custom report this sends, if any.
+    ///
+    /// When set, the reminder carries the report's id so tapping it opens the
+    /// composer with every saved choice already filled in — habits, range,
+    /// weekday filter and totals. The point of scheduling a report you built is
+    /// not having to rebuild it each time.
+    public var reportDefinitionID: UUID?
 
     public init(
         id: UUID = UUID(),
@@ -309,8 +321,12 @@ public struct ExportSchedule: Identifiable, Codable, Sendable, Hashable {
         format: ReportFormat = .html,
         recipients: [String] = [],
         lookbackDays: Int = 7,
-        lastDeliveredAt: Date? = nil
+        lastDeliveredAt: Date? = nil,
+        frequency: ReportFrequency = .weekly,
+        reportDefinitionID: UUID? = nil
     ) {
+        self.frequency = frequency
+        self.reportDefinitionID = reportDefinitionID
         self.id = id
         self.profileID = profileID
         self.isEnabled = isEnabled

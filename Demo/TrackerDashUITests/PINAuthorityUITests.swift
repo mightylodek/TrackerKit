@@ -14,6 +14,20 @@ final class PINAuthorityUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// Scrolls until an element is genuinely on screen.
+    ///
+    /// Settings grows as features land, and "Reset all data" sits at the bottom
+    /// of it — present in the tree, below the fold.
+    @discardableResult
+    private func reach(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        for _ in 0..<8 {
+            if element.exists && element.isHittable { return true }
+            app.swipeUp()
+            usleep(350_000)
+        }
+        return element.exists
+    }
+
     private func launch(as profile: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["TKDEMO_PROFILE"] = profile
@@ -49,7 +63,7 @@ final class PINAuthorityUITests: XCTestCase {
     func testAMemberCannotWipeTheDevice() {
         let app = launch(as: "Jordan")
         let reset = app.buttons["Reset all data"]
-        XCTAssertTrue(reset.waitForExistence(timeout: 30), "Reset control missing")
+        XCTAssertTrue(reach(reset, in: app), "Reset control missing")
         XCTAssertFalse(
             reset.isEnabled,
             "A member can wipe every profile — which clears every PIN along with them."
@@ -64,7 +78,9 @@ final class PINAuthorityUITests: XCTestCase {
             XCTAssertTrue(row.waitForExistence(timeout: 30), "\(name) missing from settings")
             XCTAssertTrue(row.isEnabled, "The owner cannot open \(name)'s profile")
         }
-        XCTAssertTrue(app.buttons["Reset all data"].isEnabled, "The owner cannot reset the device")
+        let reset = app.buttons["Reset all data"]
+        XCTAssertTrue(reach(reset, in: app), "Reset control missing")
+        XCTAssertTrue(reset.isEnabled, "The owner cannot reset the device")
     }
 
     /// Tapping a profile must actually open its editor.
