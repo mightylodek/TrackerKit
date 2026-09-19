@@ -174,7 +174,7 @@ public struct ProfileGateView<Content: View>: View {
             PINPadView(
                 profile: profile,
                 onCancel: { session.cancelAuthentication() },
-                onSubmit: { session.submit(pin: $0) }
+                onSubmit: { .verified(session.submit(pin: $0)) }
             )
             Spacer(minLength: 0)
         }

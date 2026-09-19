@@ -19,12 +19,13 @@ public struct PINPadView: View {
 
     private let profile: Profile
     private let pinLength: Int
-    private let onSubmit: (String) -> PINVerification
+    private let onSubmit: (String) -> PINPadOutcome
     private let onCancel: (() -> Void)?
     private let title: String
     private let subtitle: String?
 
     @State private var entered = ""
+    @State private var messageIsWarning = false
     @State private var shake = 0
     @State private var message: String?
     @State private var lockedUntil: Date?
@@ -38,7 +39,7 @@ public struct PINPadView: View {
         title: String? = nil,
         subtitle: String? = nil,
         onCancel: (() -> Void)? = nil,
-        onSubmit: @escaping (String) -> PINVerification
+        onSubmit: @escaping (String) -> PINPadOutcome
     ) {
         self.profile = profile
         self.pinLength = pinLength
@@ -119,7 +120,8 @@ public struct PINPadView: View {
         } else if let message {
             Text(message)
                 .font(theme.typography.label)
-                .foregroundStyle(theme.statusColor(.red))
+                .foregroundStyle(theme.statusColor(messageIsWarning ? .yellow : .red))
+                .multilineTextAlignment(.center)
                 .transition(.opacity)
         } else {
             // Reserve the line so the pad doesn't jump when a message appears.
@@ -164,14 +166,18 @@ public struct PINPadView: View {
     private var deleteButton: some View {
         Button {
             guard !entered.isEmpty else { return }
+            message = nil
             entered.removeLast()
         } label: {
-            Image(systemName: "delete.left")
+            Image(systemName: "delete.left.fill")
                 .font(.title2)
-                .foregroundStyle(entered.isEmpty ? theme.textMuted : theme.textPrimary)
+                .foregroundStyle(entered.isEmpty ? theme.textSecondary : theme.textPrimary)
                 .frame(width: 74, height: 74)
+                .background(Circle().fill(theme.plane))
+                .overlay(Circle().strokeBorder(theme.border, lineWidth: 1))
         }
         .buttonStyle(PINButtonStyle())
+        .opacity(entered.isEmpty ? 0.55 : 1)
         .disabled(entered.isEmpty)
         .accessibilityLabel("Delete")
     }
@@ -190,7 +196,30 @@ public struct PINPadView: View {
         handle(result)
     }
 
-    private func handle(_ result: PINVerification) {
+    private func handle(_ outcome: PINPadOutcome) {
+        switch outcome {
+        case .accepted:
+            entered = ""
+            message = nil
+            messageIsWarning = false
+
+        case .acceptedWithWarning(let text):
+            // Taken, not refused — so no shake, and the line is a caution colour.
+            entered = ""
+            message = text
+            messageIsWarning = true
+
+        case .rejected(let text):
+            messageIsWarning = false
+            fail(message: text)
+
+        case .verified(let result):
+            messageIsWarning = false
+            handle(verification: result)
+        }
+    }
+
+    private func handle(verification result: PINVerification) {
         switch result {
         case .success:
             entered = ""
@@ -266,7 +295,6 @@ public struct PINSetupView: View {
     private let onComplete: (String) -> Void
 
     @State private var firstEntry: String?
-    @State private var errorText: String?
 
     public init(profile: Profile, pinLength: Int = 4, onComplete: @escaping (String) -> Void) {
         self.profile = profile
@@ -279,34 +307,32 @@ public struct PINSetupView: View {
             profile: profile,
             pinLength: pinLength,
             title: firstEntry == nil ? "Choose a PIN" : "Confirm your PIN",
-            subtitle: errorText ?? (firstEntry == nil
-                ? "Pick \(pinLength) digits that aren't a birthday"
-                : "Enter it once more"),
+            subtitle: firstEntry == nil
+                ? "Pick any \(pinLength) digits"
+                : "Enter it once more",
             onCancel: { dismiss() },
             onSubmit: handle
         )
     }
 
-    private func handle(_ pin: String) -> PINVerification {
+    private func handle(_ pin: String) -> PINPadOutcome {
         guard let first = firstEntry else {
-            if PINManager.weakPINs.contains(pin) {
-                errorText = "That one's too easy to guess — try another"
-                return .incorrect(remainingAttempts: 99)
-            }
             firstEntry = pin
-            errorText = nil
-            return .incorrect(remainingAttempts: 99)
+            // A guessable PIN is the owner's call to make. Say so once, then get
+            // out of the way — a lock the user can't set is worse than a weak one.
+            return PINManager.weakPINs.contains(pin)
+                ? .acceptedWithWarning("That PIN is an easy guess. Using it anyway.")
+                : .accepted
         }
 
         guard pin == first else {
             firstEntry = nil
-            errorText = "Those didn't match. Start again."
-            return .incorrect(remainingAttempts: 99)
+            return .rejected("Those didn't match. Start again.")
         }
 
         onComplete(pin)
         dismiss()
-        return .success
+        return .verified(.success)
     }
 }
 
@@ -316,7 +342,9 @@ public struct PINSetupView: View {
 
     return PINPadView(profile: profile, onCancel: {}) { pin in
         attempts += 1
-        return pin == "2468" ? .success : .incorrect(remainingAttempts: max(0, 5 - attempts))
+        return .verified(pin == "2468"
+            ? .success
+            : .incorrect(remainingAttempts: max(0, 5 - attempts)))
     }
 }
 

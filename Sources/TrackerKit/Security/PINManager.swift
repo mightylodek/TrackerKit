@@ -14,6 +14,27 @@ public enum PINVerification: Sendable, Equatable {
     case noPINSet
 }
 
+// MARK: - PINPadOutcome
+
+/// What the pad should do after a completed entry.
+///
+/// Unlocking and setting a PIN look identical on screen and are not the same
+/// thing underneath: unlocking produces a security verdict, whereas the first
+/// step of setup just takes an entry and asks for it again. Setup used to signal
+/// that by returning `.incorrect(remainingAttempts: 99)`, which made the pad
+/// shake and show "Wrong PIN — 99 attempts left" on a perfectly good entry.
+public enum PINPadOutcome: Sendable, Equatable {
+    /// Entry taken. Clear the dots, no error, no shake.
+    case accepted
+    /// Entry taken, but say something first — a caution, not a failure.
+    case acceptedWithWarning(String)
+    /// Not usable. Show the message and shake, but this is not a failed unlock
+    /// attempt and must not count against the lockout ladder.
+    case rejected(String)
+    /// A real verdict from ``PINManager``.
+    case verified(PINVerification)
+}
+
 // MARK: - PINManager
 
 /// Stores and checks the 4-digit PINs that gate profile switching.

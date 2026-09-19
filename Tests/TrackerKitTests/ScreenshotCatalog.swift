@@ -116,7 +116,7 @@ struct ScreenshotCatalog {
                         isPINProtected: true
                     ),
                     onCancel: {},
-                    onSubmit: { _ in .incorrect(remainingAttempts: 4) }
+                    onSubmit: { _ in .verified(.incorrect(remainingAttempts: 4)) }
                 )
             }
         }

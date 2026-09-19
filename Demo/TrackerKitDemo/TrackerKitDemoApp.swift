@@ -45,6 +45,12 @@ struct TrackerKitDemoApp: App {
                 EmptyProfileDemo(
                     theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"])
                 )
+            } else if ProcessInfo.processInfo.environment["TKDEMO_PINSETUP"] != nil {
+                // Opens PIN setup directly. Reaching it by hand is four taps deep
+                // in Settings, and the first-run bug lived in this flow.
+                PINSetupDemo(
+                    theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"])
+                )
             } else if ProcessInfo.processInfo.environment["TKDEMO_FRESH"] != nil {
                 // A genuinely cold start: no profiles, no trackers, nothing
                 // seeded. This is the only route that exercises the welcome
@@ -123,6 +129,27 @@ private struct EmptyProfileDemo: View {
                 session.select(profile)
             }
         }
+    }
+}
+
+/// PIN setup on its own, for driving the enter-then-confirm flow.
+private struct PINSetupDemo: View {
+    let theme: TrackerTheme
+
+    @State private var store = TrackerStore.preview()
+    @State private var completed: String?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            if let completed {
+                Text("PIN set: \(completed)")
+                    .accessibilityIdentifier("pinsetup.result")
+            }
+            if let profile = store.profiles.first {
+                PINSetupView(profile: profile) { completed = $0 }
+            }
+        }
+        .trackerTheme(theme)
     }
 }
 
