@@ -64,6 +64,17 @@ public struct ChartPalette: Sendable, Hashable {
     // MARK: Identity expression
 
     /// How a tracker's stored colour is expressed on screen.
+    /// The dynamic light/dark pair whose light step is `hex`, if it is one of
+    /// ours.
+    ///
+    /// Picked colours are persisted as the light step, but on a dark surface the
+    /// *dark* step is the one that was validated for contrast. Resolving back to
+    /// the pair keeps a stored colour correct in both appearances instead of
+    /// pinning it to whichever one happened to be written down.
+    public func pair(matchingLightHex hex: String) -> ColorPair? {
+        categorical.first { $0.light.caseInsensitiveCompare(hex) == .orderedSame }
+    }
+
     public enum IdentityMode: String, Sendable, CaseIterable, Hashable {
         /// Each tracker keeps its own hue from the categorical palette.
         case categorical

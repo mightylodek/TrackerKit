@@ -180,9 +180,22 @@ public struct TrackerTheme: Sendable, Hashable {
         identityColor(hex: tracker.colorHex, seed: tracker.sortIndex)
     }
 
-    /// Identity colour for a profile.
+    /// Identity colour for a profile — **always the colour that was picked.**
+    ///
+    /// Unlike a tracker's hue, this deliberately ignores ``ChartPalette/identityMode``.
+    /// A tracker is a data mark, and brand-monochrome exists so that status is the
+    /// only meaningful colour on a data surface. A profile is a *person* on a
+    /// shared device: the colour is chosen so a child can find their own face at a
+    /// glance, it never carries a status reading, and a picker that shows an
+    /// orange swatch and then draws teal is simply broken.
+    ///
+    /// The swatches come from the validated categorical palette, so any choice is
+    /// contrast-safe in both appearances.
     public func identityColor(for profile: Profile) -> Color {
-        identityColor(hex: profile.colorHex, seed: profile.sortIndex)
+        if let pair = palette.pair(matchingLightHex: profile.colorHex) {
+            return pair.color
+        }
+        return Color(hex: profile.colorHex)
     }
 
     /// Ink for a label sitting on a control surface.
@@ -379,10 +392,19 @@ public struct TrackerControlSurface: ViewModifier {
         }
     }
 
+    /// Deliberately **not** `.interactive()`.
+    ///
+    /// Interactive glass installs its own touch handling, and this modifier is
+    /// always applied to something that is already a `Button`. The two then
+    /// compete for the gesture: a quick tap gets swallowed and only a longer
+    /// press registers. That shipped, and was reported from the device as the
+    /// Add button being "finicky" — a tap did nothing, a long-ish press worked.
+    ///
+    /// Press feedback belongs to the button, not the material. Pair this with
+    /// ``TrackerControlButtonStyle``.
     private var glass: Glass {
         let base: Glass = theme.surfaces.control == .glassClear ? .clear : .regular
-        let tinted = (theme.surfaces.tintsGlass && isProminent) ? base.tint(theme.accent) : base
-        return tinted.interactive()
+        return (theme.surfaces.tintsGlass && isProminent) ? base.tint(theme.accent) : base
     }
 }
 
@@ -403,6 +425,23 @@ public extension View {
     func trackerTouchTarget(_ size: CGFloat = 44) -> some View {
         frame(minWidth: size, minHeight: size)
             .contentShape(Rectangle())
+    }
+}
+
+// MARK: - TrackerControlButtonStyle
+
+/// Press feedback for a control wearing ``TrackerControlSurface``.
+///
+/// Supplies what interactive glass used to, without competing with the button
+/// for the gesture — the style reads `isPressed` rather than recognising a touch
+/// of its own, so a tap stays a tap.
+public struct TrackerControlButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 

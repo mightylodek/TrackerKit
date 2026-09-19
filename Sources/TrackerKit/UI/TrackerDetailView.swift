@@ -504,7 +504,7 @@ public struct TrackerDetailView: View {
             .padding(.vertical, theme.spacing.md)
             .contentTransition(.symbolEffect(.replace))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TrackerControlButtonStyle())
         .trackerControlSurface(shape: theme.radii.actionShape, isProminent: !isDoneToday)
         .sensoryFeedback(.success, trigger: isDoneToday)
         .accessibilityLabel(isDoneToday ? "Mark \(tracker.title) not done" : "Mark \(tracker.title) done")
@@ -525,7 +525,7 @@ public struct TrackerDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, theme.spacing.md)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TrackerControlButtonStyle())
         .trackerControlSurface(shape: theme.radii.actionShape, isProminent: true)
         .sensoryFeedback(.increase, trigger: current?.actual ?? 0)
         .accessibilityIdentifier("detail.quickAdd")
@@ -540,7 +540,7 @@ public struct TrackerDetailView: View {
                 .foregroundStyle(theme.textPrimary)
                 .trackerTouchTarget(theme.metrics.minimumTouchTarget + 8)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TrackerControlButtonStyle())
         .trackerControlSurface(shape: theme.radii.actionAccessoryShape)
         .accessibilityLabel("Log a specific amount")
     }

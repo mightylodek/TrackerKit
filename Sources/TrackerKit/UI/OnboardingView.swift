@@ -198,7 +198,7 @@ public struct OnboardingView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, theme.spacing.md)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TrackerControlButtonStyle())
         .trackerControlSurface(shape: theme.radii.actionShape, isProminent: true)
         .accessibilityIdentifier("onboarding.confirm")
     }
