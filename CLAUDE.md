@@ -20,7 +20,8 @@ tracker_library_ios/
 │   ├── Widgets/               — WidgetSnapshot, shared store, S/M/L views
 │   ├── Export/                — report model, 4 renderers, scheduler, composers
 │   └── UI/                    — assembled screens
-├── Tests/TrackerKitTests/     — 75 tests
+├── Tests/TrackerKitTests/     — 110 tests
+├── Demo/TrackerDashUITests/   — 17 UI tests (taps, not just draws)
 └── Demo/TrackerKitDemo.xcodeproj
 ```
 
@@ -134,5 +135,10 @@ decides, and the editor explains.
 
 - Widget extension is built and working (`Demo/TrackerDashWidgets`), display-only.
 - Repo: `git@github.com:mightylodek/TrackerKit.git` (public), branch `main`.
-- The demo app runs in-memory; flip `inMemory: false` in `TrackerKitDemoApp` to
-  exercise real persistence and migration.
+- The demo app runs **on-disk**. Automated runs opt into a clean slate with
+  `TKDEMO_INMEMORY=1`, which the UI test classes set. Persistence across relaunch
+  is covered by `PersistenceUITests`; durability over days/reboots is a device
+  question — see `docs/DEVICE-TEST-PLAN.md`.
+- `swift test` does **not** work: it builds for macOS, where `MessageUI` is
+  missing. Always use `xcodebuild` with a simulator destination.
+- Testing guide: `docs/TESTING.md`. Device plan: `docs/DEVICE-TEST-PLAN.md`.
