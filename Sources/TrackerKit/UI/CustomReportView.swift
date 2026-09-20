@@ -14,6 +14,8 @@ public struct CustomReportView: View {
 
     private let report: CustomReport
 
+    @State private var share: ShareItem?
+
     public init(report: CustomReport) {
         self.report = report
     }
@@ -31,8 +33,12 @@ public struct CustomReportView: View {
                     }
                     .padding(.top, theme.spacing.xl)
                 } else {
+                    if !report.definition.visuals.isEmpty {
+                        ReportVisualsView(report: report)
+                    }
+
                     ForEach(report.trackers) { tracker in
-                        trackerCard(tracker)
+                        ReportTrackerTable(tracker: tracker)
                     }
                 }
             }
@@ -41,6 +47,33 @@ public struct CustomReportView: View {
         .background(theme.plane)
         .navigationTitle(report.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    exportPDF()
+                } label: {
+                    Label("Export PDF", systemImage: "square.and.arrow.up")
+                }
+                .disabled(report.isEmpty)
+                .accessibilityIdentifier("report.exportPDF")
+            }
+        }
+        .sheet(item: $share) { item in
+            ShareSheet(items: [item.url])
+        }
+    }
+
+    /// A shared file, wrapped so `.sheet(item:)` can key off it.
+    private struct ShareItem: Identifiable {
+        let url: URL
+        var id: String { url.path }
+    }
+
+    private func exportPDF() {
+        // Rendering is synchronous and on the main actor because ImageRenderer
+        // is; a multi-page report is a fraction of a second at this size.
+        guard let url = try? CustomReportPDFRenderer().write(report, theme: theme) else { return }
+        share = ShareItem(url: url)
     }
 
     private var header: some View {
@@ -66,7 +99,18 @@ public struct CustomReportView: View {
         return parts.joined(separator: " · ")
     }
 
-    private func trackerCard(_ tracker: CustomReportTracker) -> some View {
+}
+
+// MARK: - ReportTrackerTable
+
+/// One habit's numbers. Shared by the screen and the PDF so a printed report is
+/// the same report, not a second implementation that drifts.
+struct ReportTrackerTable: View {
+    @Environment(\.trackerTheme) private var theme
+
+    let tracker: CustomReportTracker
+
+    var body: some View {
         TrackerCard(title: tracker.title, subtitle: tracker.totalText) {
             VStack(alignment: .leading, spacing: theme.spacing.lg) {
                 ForEach(tracker.sections) { section in

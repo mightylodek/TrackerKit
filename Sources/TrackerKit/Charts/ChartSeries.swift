@@ -54,9 +54,36 @@ public struct ChartSeries: Identifiable, Sendable, Hashable {
         self.unit = unit
     }
 
+    /// The colour this series draws in.
+    ///
+    /// Routed through ``ChartPalette/identityColor(hex:seed:)`` so a
+    /// brand-monochrome theme actually applies: taking the stored hex raw drew a
+    /// blue chart in a teal app and ignored the theme entirely.
     public func color(in palette: ChartPalette) -> Color {
-        if let colorHex { return Color(hex: colorHex) }
-        return palette.series(colorIndex)
+        if let colorHex { return palette.identityColor(hex: colorHex, seed: colorIndex) }
+        return palette.seriesColor(colorIndex)
+    }
+
+    /// Contiguous runs of real data.
+    ///
+    /// Swift Charts joins consecutive points in a series, so a day with nothing
+    /// logged either dives to zero or gets drawn straight through — both of
+    /// which contradict the table beside it saying "—". Giving each run its own
+    /// series identifier is the documented way to leave a genuine gap;
+    /// `Optional` is not `Plottable`, so nil values are not an option.
+    public var dataRuns: [[ChartPoint]] {
+        var runs: [[ChartPoint]] = []
+        var current: [ChartPoint] = []
+        for point in points {
+            if point.hasData {
+                current.append(point)
+            } else if !current.isEmpty {
+                runs.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty { runs.append(current) }
+        return runs
     }
 
     public var values: [Double] { points.map(\.value) }

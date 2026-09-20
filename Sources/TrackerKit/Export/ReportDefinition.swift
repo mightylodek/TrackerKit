@@ -107,6 +107,12 @@ public struct ReportDefinition: Identifiable, Codable, Sendable, Hashable {
     /// to `.total` rather than rendering nothing.
     public var breakdowns: Set<ReportBreakdown>
 
+    /// Which charts to draw, in the order they appear on the page.
+    ///
+    /// Empty means a table-only report, which is a legitimate choice rather than
+    /// an unfinished one — the numbers are often the point.
+    public var visuals: [ReportVisual]
+
     /// The schedule that sends this report, if it is on one.
     public var scheduleID: UUID?
 
@@ -121,6 +127,7 @@ public struct ReportDefinition: Identifiable, Codable, Sendable, Hashable {
         weekdays: Set<Int> = [],
         firstWeekday: Int = 1,
         breakdowns: Set<ReportBreakdown> = [.daily, .total],
+        visuals: [ReportVisual] = [],
         scheduleID: UUID? = nil,
         createdAt: Date = .now
     ) {
@@ -132,6 +139,7 @@ public struct ReportDefinition: Identifiable, Codable, Sendable, Hashable {
         self.weekdays = weekdays
         self.firstWeekday = min(max(firstWeekday, 1), 7)
         self.breakdowns = breakdowns.isEmpty ? [.total] : breakdowns
+        self.visuals = visuals
         self.scheduleID = scheduleID
         self.createdAt = createdAt
     }

@@ -55,6 +55,16 @@ public struct CustomReportTracker: Identifiable, Sendable, Hashable {
     public let symbolName: String
     public let colorHex: String
     public let aggregation: Aggregation
+    /// The goal governing the window, if there was one.
+    public let goal: GoalVersion?
+    /// What hitting the goal across this whole window would have come to.
+    ///
+    /// A daily goal has to be scaled: 30 minutes a day over five counted days is
+    /// a target of 150, not 30. Anything coarser than daily is left unscaled —
+    /// pro-rating a weekly goal across a partial week invents a number nobody
+    /// set. `nil` when the habit has no goal, which is why rings and bullets skip
+    /// it rather than drawing against nothing.
+    public let target: Double?
     public let sections: [CustomReportSection]
     /// The whole range in one number, always computed whether or not `.total`
     /// was asked for — a caller wants it for a headline even when the report
@@ -71,10 +81,14 @@ public struct CustomReportTracker: Identifiable, Sendable, Hashable {
         symbolName: String,
         colorHex: String,
         aggregation: Aggregation,
+        goal: GoalVersion? = nil,
+        target: Double? = nil,
         sections: [CustomReportSection],
         total: Double,
         entryCount: Int
     ) {
+        self.goal = goal
+        self.target = target
         self.trackerID = trackerID
         self.title = title
         self.unit = unit
@@ -223,6 +237,10 @@ public struct CustomReportEngine: Sendable {
                 calendar: calendar
             )
             let aggregation = tracker.currentGoal?.aggregation ?? tracker.kind.defaultAggregation
+            // The goal in force when the window opened, not today's — a goal
+            // changed mid-window would otherwise be applied retroactively to
+            // days it never governed.
+            let goal = tracker.goal(on: interval.start) ?? tracker.currentGoal
             let sections = definition.orderedBreakdowns.map { breakdown in
                 CustomReportSection(
                     breakdown: breakdown,
@@ -236,6 +254,9 @@ public struct CustomReportEngine: Sendable {
                     )
                 )
             }
+            let countedDays = sections.first { $0.breakdown == .daily }?.buckets.count
+                ?? countedDayCount(in: interval, weekdays: definition.weekdays, calendar: calendar)
+
             return CustomReportTracker(
                 trackerID: tracker.id,
                 title: tracker.title,
@@ -243,6 +264,8 @@ public struct CustomReportEngine: Sendable {
                 symbolName: tracker.symbolName,
                 colorHex: tracker.colorHex,
                 aggregation: aggregation,
+                goal: goal,
+                target: windowTarget(goal: goal, aggregation: aggregation, countedDays: countedDays),
                 sections: sections,
                 total: aggregation.apply(to: entries.map(\.value)),
                 entryCount: entries.count
@@ -250,6 +273,28 @@ public struct CustomReportEngine: Sendable {
         }
 
         return CustomReport(definition: definition, interval: interval, generatedAt: now, trackers: built)
+    }
+
+    /// Scales a goal to the reporting window.
+    private func windowTarget(goal: GoalVersion?, aggregation: Aggregation, countedDays: Int) -> Double? {
+        guard let goal else { return nil }
+        guard goal.cadence == .daily, aggregation == .sum else { return goal.target }
+        return goal.target * Double(max(1, countedDays))
+    }
+
+    /// How many days the filter actually lets through.
+    private func countedDayCount(in interval: DateInterval, weekdays: Set<Int>, calendar: Calendar) -> Int {
+        guard !weekdays.isEmpty else {
+            return calendar.dateComponents([.day], from: interval.start, to: interval.end).day ?? 0
+        }
+        var count = 0
+        var cursor = interval.start
+        while cursor < interval.end {
+            if weekdays.contains(calendar.component(.weekday, from: cursor)) { count += 1 }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return count
     }
 
     /// Entries inside the range, on the weekdays that count.

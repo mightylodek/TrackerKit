@@ -127,6 +127,42 @@ final class ReportBuilderUITests: XCTestCase {
         XCTAssertTrue(reach(weekStart, in: app), "Week start picker never appeared")
     }
 
+    /// Charts picked in the builder have to reach the report.
+    func testChartsAppearInTheReport() {
+        let app = launch()
+        app.buttons["report.new"].tap()
+        nameIt(app, "With charts")
+        app.buttons["report.habit.Reading"].tap()
+
+        let area = app.buttons["report.visual.area"]
+        XCTAssertTrue(reach(area, in: app), "Chart picker never became reachable")
+        area.tap()
+        shot(app, "report-chart-picker")
+
+        app.buttons["report.save"].tap()
+        app.buttons["report.row.With charts"].tap()
+
+        XCTAssertTrue(
+            app.staticTexts["Area chart"].waitForExistence(timeout: 10),
+            "A picked chart did not appear in the report"
+        )
+        shot(app, "report-with-chart")
+    }
+
+    /// The PDF button must be there and enabled once there is data.
+    func testExportIsOfferedOnAReportWithData() {
+        let app = launch()
+        app.buttons["report.new"].tap()
+        nameIt(app, "Exportable")
+        app.buttons["report.habit.Reading"].tap()
+        app.buttons["report.save"].tap()
+        app.buttons["report.row.Exportable"].tap()
+
+        let export = app.buttons["report.exportPDF"]
+        XCTAssertTrue(export.waitForExistence(timeout: 10), "No PDF export control")
+        XCTAssertTrue(export.isEnabled, "Export disabled on a report that has data")
+    }
+
     func testWeekdayFilterIsReachable() {
         let app = launch()
         app.buttons["report.new"].tap()

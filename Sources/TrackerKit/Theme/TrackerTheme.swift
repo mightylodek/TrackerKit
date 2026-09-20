@@ -159,19 +159,7 @@ public struct TrackerTheme: Sendable, Hashable {
     /// placed on the brand ramp by `seed`, so trackers stay distinguishable by
     /// intensity while the screen stays one colour.
     public func identityColor(hex: String, seed: Int = 0) -> Color {
-        switch palette.identityMode {
-        case .categorical:
-            return Color(hex: hex)
-        case .brandMonochrome:
-            let ramp = palette.sequential
-            guard ramp.count > 1 else { return palette.brand.accent.color }
-            // Use the upper half of the ramp only — the lower steps are near the
-            // ground and would render a tracker as almost invisible.
-            let lower = max(palette.sequentialOrdinalFloorIndex, ramp.count / 2 - 1)
-            let span = max(1, ramp.count - 1 - lower)
-            let step = lower + (abs(seed) % (span + 1))
-            return ramp[min(step, ramp.count - 1)].color
-        }
+        palette.identityColor(hex: hex, seed: seed)
     }
 
     /// Identity colour for a tracker, seeded by its position so the assignment is

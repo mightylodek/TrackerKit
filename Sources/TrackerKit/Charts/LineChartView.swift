@@ -107,12 +107,16 @@ public struct TrackerLineChart: View {
 
     private var chart: some View {
         Chart {
+            // Run by run: a day with nothing logged breaks the line rather
+            // than being drawn through, which would assert continuity that the
+            // data does not have.
             ForEach(series) { item in
-                ForEach(item.points) { point in
+                ForEach(Array(item.dataRuns.enumerated()), id: \.offset) { runIndex, run in
+                ForEach(run) { point in
                     LineMark(
                         x: .value("Date", point.date),
                         y: .value("Value", point.value),
-                        series: .value("Series", item.name)
+                        series: .value("Series", "\(item.name)#\(runIndex)")
                     )
                     .foregroundStyle(item.color(in: theme.palette))
                     .lineStyle(StrokeStyle(lineWidth: theme.metrics.lineWidth, lineCap: .round, lineJoin: .round))
@@ -133,6 +137,7 @@ public struct TrackerLineChart: View {
                                 .overlay(Circle().strokeBorder(theme.surface, lineWidth: 2))
                         }
                     }
+                }
                 }
             }
 

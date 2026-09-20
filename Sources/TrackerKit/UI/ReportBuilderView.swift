@@ -27,6 +27,7 @@ public struct ReportBuilderView: View {
     @State private var weekdays: Set<Int>
     @State private var firstWeekday: Int
     @State private var breakdowns: Set<ReportBreakdown>
+    @State private var visuals: [ReportVisual]
 
     @State private var isScheduled: Bool
     @State private var frequency: ReportFrequency
@@ -60,6 +61,7 @@ public struct ReportBuilderView: View {
         _weekdays = State(initialValue: definition?.weekdays ?? [])
         _firstWeekday = State(initialValue: definition?.firstWeekday ?? 1)
         _breakdowns = State(initialValue: definition?.breakdowns ?? [.daily, .total])
+        _visuals = State(initialValue: definition?.visuals ?? [])
 
         switch definition?.range {
         case .absolute(let start, let end):
@@ -115,6 +117,7 @@ public struct ReportBuilderView: View {
                 rangeSection
                 weekdaysSection
                 totalsSection
+                visualsSection
                 scheduleSection
                 previewSection
             }
@@ -275,6 +278,63 @@ public struct ReportBuilderView: View {
         }
     }
 
+    /// Which charts go in, drawn from the same filtered data as the numbers.
+    private var visualsSection: some View {
+        Section {
+            ForEach(ReportVisual.allCases, id: \.self) { visual in
+                Button {
+                    toggleVisual(visual)
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: theme.spacing.md) {
+                        Image(systemName: visuals.contains(visual) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(visuals.contains(visual) ? theme.accent : theme.textMuted)
+                        VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                            Label(visual.displayName, systemImage: visual.symbolName)
+                                .foregroundStyle(theme.textPrimary)
+                            Text(explanation(for: visual))
+                                .font(theme.typography.label)
+                                .foregroundStyle(theme.textSecondary)
+                        }
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("report.visual.\(visual.rawValue)")
+            }
+        } header: {
+            Text("Charts")
+        } footer: {
+            Text(visuals.isEmpty
+                 ? "None — the report will be numbers only, which is often what you want."
+                 : "\(visuals.count) chart\(visuals.count == 1 ? "" : "s"), drawn from the same filtered data as the totals. Export the lot as a PDF from the report itself.")
+        }
+    }
+
+    /// Says when a chart won't draw for the current selection, rather than
+    /// letting it silently render empty.
+    private func explanation(for visual: ReportVisual) -> String {
+        if visual.requiresGoal && !selectedHaveGoals {
+            return "Needs a goal — none of the habits picked have one."
+        }
+        return visual.explanation
+    }
+
+    private var selectedHaveGoals: Bool {
+        store.activeTrackers
+            .filter { selected.contains($0.id) }
+            .contains { $0.currentGoal != nil }
+    }
+
+    private func toggleVisual(_ visual: ReportVisual) {
+        if let index = visuals.firstIndex(of: visual) {
+            visuals.remove(at: index)
+        } else {
+            // Appended, so the order on the page is the order they were picked.
+            visuals.append(visual)
+        }
+    }
+
     private var scheduleSection: some View {
         Section {
             Toggle("Remind me to send it", isOn: $isScheduled)
@@ -371,6 +431,7 @@ public struct ReportBuilderView: View {
             weekdays: weekdays,
             firstWeekday: firstWeekday,
             breakdowns: breakdowns,
+            visuals: visuals,
             scheduleID: existing?.scheduleID,
             createdAt: existing?.createdAt ?? .now
         )

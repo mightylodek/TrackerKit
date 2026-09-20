@@ -64,6 +64,36 @@ public struct ChartPalette: Sendable, Hashable {
     // MARK: Identity expression
 
     /// How a tracker's stored colour is expressed on screen.
+    /// Resolves a stored identity hex under the palette's ``identityMode``.
+    ///
+    /// Lives here rather than only on `TrackerTheme` because charts resolve
+    /// their own colours from a palette. While it was theme-only, a chart drew
+    /// the raw categorical hue no matter what the theme said — a blue area chart
+    /// in a monochrome teal app, which is the bug that revealed this.
+    func identityColor(hex: String, seed: Int = 0) -> Color {
+        switch identityMode {
+        case .categorical:
+            return Color(hex: hex)
+        case .brandMonochrome:
+            let ramp = sequential
+            guard ramp.count > 1 else { return brand.accent.color }
+            // Upper half only — the lower steps sit near the ground and would
+            // render a series almost invisible.
+            let lower = max(sequentialOrdinalFloorIndex, ramp.count / 2 - 1)
+            let span = max(1, ramp.count - 1 - lower)
+            let step = lower + (abs(seed) % (span + 1))
+            return ramp[min(step, ramp.count - 1)].color
+        }
+    }
+
+    /// A series colour that honours ``identityMode``.
+    func seriesColor(_ index: Int) -> Color {
+        switch identityMode {
+        case .categorical: return series(index)
+        case .brandMonochrome: return identityColor(hex: "", seed: index)
+        }
+    }
+
     /// The dynamic light/dark pair whose light step is `hex`, if it is one of
     /// ours.
     ///

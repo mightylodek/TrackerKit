@@ -41,7 +41,16 @@ final class AccessibilityAuditTests: XCTestCase {
     /// Fails only on categories we have not already accepted.
     private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit { issue in
-            Self.knownIssues.contains(issue.auditType)
+            if !Self.knownIssues.contains(issue.auditType) {
+                // A category alone does not say what to go and fix. Keep this
+                // cheap — `element.debugDescription` dumps the whole tree per
+                // issue and stalls the run.
+                print("AUDIT-NEW: type=\(issue.auditType.rawValue) "
+                      + "desc=\(issue.compactDescription) "
+                      + "label=\(issue.element?.label ?? "nil") "
+                      + "id=\(issue.element?.identifier ?? "nil")")
+            }
+            return Self.knownIssues.contains(issue.auditType)
         }
     }
 

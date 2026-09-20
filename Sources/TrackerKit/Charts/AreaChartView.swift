@@ -85,32 +85,77 @@ public struct TrackerAreaChart: View {
 
     private var chart: some View {
         Chart {
+            // Plotted run by run rather than point by point, so a day with
+            // nothing logged leaves a gap instead of a dive to zero. A zero and
+            // an absence are different claims.
             ForEach(series) { item in
-                ForEach(item.points) { point in
-                    AreaMark(
-                        x: .value("Date", point.date),
-                        y: .value(item.unit.isEmpty ? "Value" : item.unit, point.value),
-                        stacking: isStacked ? .standard : .standard
-                    )
-                    .foregroundStyle(by: .value("Series", item.name))
-                    .interpolationMethod(smoothed ? .monotone : .linear)
-                    .opacity(isStacked ? 0.85 : 1)
+                ForEach(Array(item.dataRuns.enumerated()), id: \.offset) { runIndex, run in
+                    ForEach(run) { point in
+                        AreaMark(
+                            x: .value("Date", point.date),
+                            y: .value(item.unit.isEmpty ? "Value" : item.unit, point.value),
+                            // Series keyed by run so the fill breaks at a gap
+                            // too; the stroke alone splitting left a filled
+                            // region spanning days with nothing logged.
+                            series: .value("Run", "\(item.name)#\(runIndex)"),
+                            stacking: .standard
+                        )
+                        // Explicit colour rather than `foregroundStyle(by:)`.
+                        // Combining `by:` with a per-run `series:` makes Charts
+                        // build a plot group per run that carries no description,
+                        // which the accessibility auditor reports as text nobody
+                        // can reach. The legend below is drawn by this file
+                        // anyway, so the implicit one bought nothing.
+                        .foregroundStyle(item.color(in: theme.palette))
+                        .interpolationMethod(smoothed ? .monotone : .linear)
+                        .opacity(isStacked ? 0.85 : 1)
+                        // Splitting a series into runs creates a plot group per
+                        // run, and an undescribed group reads to the
+                        // accessibility auditor as text nobody can reach.
+                        // Describing the marks is the documented pattern, and it
+                        // makes the chart navigable rather than merely legal.
+                        .accessibilityLabel(Formatters.dayMonth(point.date))
+                        .accessibilityValue(Formatters.value(point.value, unit: item.unit))
+                    }
                 }
             }
 
             // Top edge. On a single series this is the readable line over the
             // wash; on a stack it is the 2px separator that keeps bands distinct.
             ForEach(series) { item in
-                ForEach(item.points) { point in
-                    LineMark(
-                        x: .value("Date", point.date),
-                        y: .value("Value", point.value),
-                        series: .value("Edge", item.name)
-                    )
-                    .foregroundStyle(item.color(in: theme.palette))
-                    .lineStyle(StrokeStyle(lineWidth: theme.metrics.lineWidth, lineCap: .round))
-                    .interpolationMethod(smoothed ? .monotone : .linear)
-                    .opacity(isStacked ? 0 : 1)
+                ForEach(Array(item.dataRuns.enumerated()), id: \.offset) { runIndex, run in
+                    ForEach(run) { point in
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("Value", point.value),
+                            // The run index is part of the series identity, which
+                            // is what actually breaks the stroke at a gap.
+                            series: .value("Edge", "\(item.name)#\(runIndex)")
+                        )
+                        .foregroundStyle(item.color(in: theme.palette))
+                        .lineStyle(StrokeStyle(lineWidth: theme.metrics.lineWidth, lineCap: .round))
+                        .interpolationMethod(smoothed ? .monotone : .linear)
+                        .opacity(isStacked ? 0 : 1)
+                    }
+
+                    // A run of one draws neither an area nor a stroke — two
+                    // points are needed for both — so an isolated day would
+                    // vanish entirely. Mark it.
+                    if run.count == 1, let only = run.first, !isStacked {
+                        PointMark(
+                            x: .value("Date", only.date),
+                            y: .value("Value", only.value)
+                        )
+                        .foregroundStyle(item.color(in: theme.palette))
+                        .symbolSize(theme.metrics.markerSize * theme.metrics.markerSize)
+                        // A bare mark is text on screen with nothing behind it
+                        // for VoiceOver, which the accessibility auditor flags
+                        // as unreachable. It is a data point; it can say so.
+                        .accessibilityLabel(Formatters.dayMonth(only.date))
+                        .accessibilityValue(
+                            Formatters.value(only.value, unit: item.unit)
+                        )
+                    }
                 }
             }
 
