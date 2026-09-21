@@ -14,6 +14,12 @@ import UIKit
 /// SwiftUI pagination would need every view to report its own height and split
 /// cleanly, which charts do not; slicing is dumber and handles arbitrary content
 /// without ever cutting a page short.
+///
+/// Drawing goes through `UIGraphicsPDFRenderer` rather than a raw `CGContext`.
+/// A bare CGContext PDF has its origin bottom-left while `UIImage` has it
+/// top-left, and reconciling that by hand produced pages that printed rotated
+/// 180°. `UIGraphicsPDFRenderer` works in UIKit coordinates, so `draw(in:)`
+/// means what it looks like it means.
 @MainActor
 public struct CustomReportPDFRenderer {
 
@@ -21,17 +27,57 @@ public struct CustomReportPDFRenderer {
     public static let pageSize = CGSize(width: 612, height: 792)
     public static let margin: CGFloat = 36
 
+    /// The theme a report prints in.
+    ///
+    /// Nocturne is a dark-first identity, and a dark page is the right call on
+    /// screen and the wrong one on paper — it prints a near-black ground across
+    /// every sheet. Print defaults to the light theme; the app's own look is
+    /// available for anyone exporting to read on a screen.
+    public enum Appearance: String, Sendable, CaseIterable, Hashable {
+        case light
+        case matchApp
+
+        public var displayName: String {
+            switch self {
+            case .light: "Light — best for printing"
+            case .matchApp: "Match the app"
+            }
+        }
+
+        public var detail: String {
+            switch self {
+            case .light: "White background, dark text. Uses far less ink."
+            case .matchApp: "The dark theme you see on screen."
+            }
+        }
+    }
+
     public var scale: CGFloat
 
     public init(scale: CGFloat = 2) {
         self.scale = scale
     }
 
-    public func render(_ report: CustomReport, theme: TrackerTheme = .nocturne) -> Data {
+    /// Renders in the appearance chosen for this export.
+    public func render(_ report: CustomReport, appearance: Appearance, appTheme: TrackerTheme) -> Data {
+        switch appearance {
+        case .light:
+            return render(report, theme: .standard, colorScheme: .light)
+        case .matchApp:
+            return render(report, theme: appTheme, colorScheme: appTheme.preferredColorScheme ?? .light)
+        }
+    }
+
+    public func render(
+        _ report: CustomReport,
+        theme: TrackerTheme = .standard,
+        colorScheme: ColorScheme = .light
+    ) -> Data {
         let contentWidth = Self.pageSize.width - Self.margin * 2
 
         let document = CustomReportDocumentView(report: report)
             .trackerTheme(theme)
+            .environment(\.colorScheme, colorScheme)
             .frame(width: contentWidth)
             .background(theme.plane)
 
@@ -43,31 +89,46 @@ public struct CustomReportPDFRenderer {
 
         let usableHeight = Self.pageSize.height - Self.margin * 2
         let pageCount = max(1, Int(ceil(image.size.height / usableHeight)))
+        let bounds = CGRect(origin: .zero, size: Self.pageSize)
 
-        let data = NSMutableData()
-        guard let consumer = CGDataConsumer(data: data as CFMutableData) else { return Data() }
-        var mediaBox = CGRect(origin: .zero, size: Self.pageSize)
-        guard let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return Data() }
+        // Resolve the ground once, against the appearance being drawn, rather
+        // than letting a dynamic colour pick the device's.
+        let ground = UIColor(theme.plane).resolvedColor(
+            with: UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)
+        )
 
-        for page in 0..<pageCount {
-            context.beginPDFPage(nil)
+        return paginate(image, ground: ground)
+    }
 
-            // Paint the page ground first: a transparent PDF page prints as
-            // white, which turns a dark theme's light text invisible on paper.
-            context.setFillColor(UIColor(theme.plane).cgColor)
-            context.fill(mediaBox)
+    /// Slices a tall image across PDF pages.
+    ///
+    /// Split out from `render` so a test can feed it an image whose corners are
+    /// known and check where they land. Orientation is exactly the kind of thing
+    /// that looks fine in a thumbnail and comes out of a printer upside down.
+    func paginate(_ image: UIImage, ground: UIColor) -> Data {
+        let usableHeight = Self.pageSize.height - Self.margin * 2
+        let pageCount = max(1, Int(ceil(image.size.height / usableHeight)))
+        let bounds = CGRect(origin: .zero, size: Self.pageSize)
 
-            let offset = CGFloat(page) * usableHeight
-            let sliceHeight = min(usableHeight, image.size.height - offset)
+        let pdf = UIGraphicsPDFRenderer(bounds: bounds)
+        return pdf.pdfData { context in
+            for page in 0..<pageCount {
+                context.beginPage()
 
-            if let slice = crop(image, y: offset, height: sliceHeight) {
-                // Flip: Core Graphics' PDF origin is bottom-left, UIImage's is
-                // top-left. Without this every page draws upside down.
-                context.saveGState()
-                context.translateBy(x: 0, y: Self.pageSize.height)
-                context.scaleBy(x: 1, y: -1)
-                context.draw(
-                    slice,
+                // A transparent PDF page prints white, which would leave a dark
+                // theme's light text invisible on paper.
+                ground.setFill()
+                context.fill(bounds)
+
+                let offset = CGFloat(page) * usableHeight
+                let sliceHeight = min(usableHeight, image.size.height - offset)
+                guard sliceHeight > 0, let slice = crop(image, y: offset, height: sliceHeight) else {
+                    continue
+                }
+
+                // UIImage draws the right way up here — no manual flip, which is
+                // what produced 180°-rotated pages before.
+                UIImage(cgImage: slice, scale: scale, orientation: .up).draw(
                     in: CGRect(
                         x: Self.margin,
                         y: Self.margin,
@@ -75,20 +136,15 @@ public struct CustomReportPDFRenderer {
                         height: sliceHeight
                     )
                 )
-                context.restoreGState()
             }
-
-            context.endPDFPage()
         }
-
-        context.closePDF()
-        return data as Data
     }
 
     /// Writes to a temporary file and returns the URL, for sharing or attaching.
     public func write(
         _ report: CustomReport,
-        theme: TrackerTheme = .nocturne,
+        appearance: Appearance = .light,
+        appTheme: TrackerTheme = .nocturne,
         to directory: URL? = nil
     ) throws -> URL {
         let folder = directory ?? FileManager.default.temporaryDirectory
@@ -98,7 +154,7 @@ public struct CustomReportPDFRenderer {
             .joined(separator: "-")
         let stem = safeName.isEmpty ? "report" : safeName
         let url = folder.appendingPathComponent("\(stem)-\(Formatters.fileStamp()).pdf")
-        try render(report, theme: theme).write(to: url, options: .atomic)
+        try render(report, appearance: appearance, appTheme: appTheme).write(to: url, options: .atomic)
         return url
     }
 

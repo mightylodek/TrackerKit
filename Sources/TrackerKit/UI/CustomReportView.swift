@@ -15,6 +15,7 @@ public struct CustomReportView: View {
     private let report: CustomReport
 
     @State private var share: ShareItem?
+    @State private var isChoosingAppearance = false
 
     public init(report: CustomReport) {
         self.report = report
@@ -50,7 +51,7 @@ public struct CustomReportView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    exportPDF()
+                    isChoosingAppearance = true
                 } label: {
                     Label("Export PDF", systemImage: "square.and.arrow.up")
                 }
@@ -61,6 +62,21 @@ public struct CustomReportView: View {
         .sheet(item: $share) { item in
             ShareSheet(items: [item.url])
         }
+        // Asked rather than assumed: a dark page is right on screen and wrong on
+        // paper, where it lays down a near-black ground across every sheet.
+        .confirmationDialog(
+            "Export as PDF",
+            isPresented: $isChoosingAppearance,
+            titleVisibility: .visible
+        ) {
+            ForEach(CustomReportPDFRenderer.Appearance.allCases, id: \.self) { appearance in
+                Button(appearance.displayName) { exportPDF(appearance) }
+                    .accessibilityIdentifier("report.export.\(appearance.rawValue)")
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Printing the dark theme covers the page in ink.")
+        }
     }
 
     /// A shared file, wrapped so `.sheet(item:)` can key off it.
@@ -69,10 +85,12 @@ public struct CustomReportView: View {
         var id: String { url.path }
     }
 
-    private func exportPDF() {
+    private func exportPDF(_ appearance: CustomReportPDFRenderer.Appearance) {
         // Rendering is synchronous and on the main actor because ImageRenderer
         // is; a multi-page report is a fraction of a second at this size.
-        guard let url = try? CustomReportPDFRenderer().write(report, theme: theme) else { return }
+        guard let url = try? CustomReportPDFRenderer().write(
+            report, appearance: appearance, appTheme: theme
+        ) else { return }
         share = ShareItem(url: url)
     }
 

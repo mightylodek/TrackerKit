@@ -163,6 +163,35 @@ final class ReportBuilderUITests: XCTestCase {
         XCTAssertTrue(export.isEnabled, "Export disabled on a report that has data")
     }
 
+    /// Printing the dark theme covers a sheet in ink, so the export asks first
+    /// and offers the light option at the top.
+    func testExportAsksBeforePrintingDark() {
+        let app = launch()
+        app.buttons["report.new"].tap()
+        nameIt(app, "Printable")
+        app.buttons["report.habit.Reading"].tap()
+        app.buttons["report.save"].tap()
+        app.buttons["report.row.Printable"].tap()
+
+        app.buttons["report.exportPDF"].tap()
+
+        let light = app.buttons["report.export.light"]
+        XCTAssertTrue(light.waitForExistence(timeout: 10), "Export did not ask which appearance")
+        XCTAssertTrue(app.buttons["report.export.matchApp"].exists, "No way to keep the app's look")
+
+        // Dismiss without exporting — the share sheet is a system surface and
+        // this test is about the choice, not the sheet.
+        //
+        // Anchored to a toolbar button, `confirmationDialog` presents as a
+        // popover, and a popover has no Cancel row: tapping outside dismisses
+        // it. Querying for one found nothing, which read as a broken prompt.
+        let dismiss = app.otherElements["PopoverDismissRegion"]
+        XCTAssertTrue(dismiss.waitForExistence(timeout: 5), "No way out of the export prompt")
+        dismiss.tap()
+        XCTAssertTrue(app.buttons["report.exportPDF"].waitForExistence(timeout: 5),
+                      "Cancelling the export left the report unusable")
+    }
+
     func testWeekdayFilterIsReachable() {
         let app = launch()
         app.buttons["report.new"].tap()
