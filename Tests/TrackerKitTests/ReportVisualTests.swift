@@ -1,3 +1,8 @@
+// iOS-only: resolving a dynamic colour against a named appearance needs
+// `UITraitCollection`, which watchOS does not have — and does not need, having
+// no light appearance to resolve against.
+#if os(iOS)
+
 import Testing
 import Foundation
 import SwiftUI
@@ -358,3 +363,5 @@ struct IsolatedPointTests {
         #expect(renderer.uiImage != nil)
     }
 }
+
+#endif
