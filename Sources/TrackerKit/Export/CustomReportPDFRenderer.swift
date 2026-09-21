@@ -198,7 +198,9 @@ struct CustomReportDocumentView: View {
             }
 
             if !report.definition.visuals.isEmpty {
-                ReportVisualsView(report: report, isPaged: true)
+                // Two across on paper. Stacked full-width charts cost a page per
+                // two, which is absurd on a sheet this size.
+                ReportVisualsView(report: report, layout: .grid)
             }
 
             ForEach(report.trackers) { tracker in

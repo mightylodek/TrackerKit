@@ -65,3 +65,65 @@ public extension CustomReport {
         Set(trackers.map(\.unit)).sorted().filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
+
+// MARK: - ReportChartTile
+
+/// One chart on the page.
+///
+/// A report's visuals do not map one-to-one onto charts: a line chart holds
+/// every habit at once, while an area chart draws one per habit. Flattening to
+/// tiles first is what lets the page lay them out in a grid — otherwise "two
+/// charts" might be one card containing four.
+public struct ReportChartTile: Identifiable, Sendable, Hashable {
+    public let visual: ReportVisual
+    /// `nil` for a chart that holds every habit at once.
+    public let trackerID: UUID?
+    public let title: String
+    public let subtitle: String?
+
+    public var id: String { "\(visual.rawValue)-\(trackerID?.uuidString ?? "all")" }
+
+    public init(visual: ReportVisual, trackerID: UUID?, title: String, subtitle: String?) {
+        self.visual = visual
+        self.trackerID = trackerID
+        self.title = title
+        self.subtitle = subtitle
+    }
+}
+
+public extension CustomReport {
+
+    /// Every chart this report draws, one entry per tile on the page.
+    var chartTiles: [ReportChartTile] {
+        definition.visuals.flatMap { visual -> [ReportChartTile] in
+            if visual.combinesTrackers {
+                return [ReportChartTile(
+                    visual: visual,
+                    trackerID: nil,
+                    title: visual.displayName,
+                    subtitle: mixedUnitsCaption(for: visual)
+                )]
+            }
+            return trackers.map { tracker in
+                ReportChartTile(
+                    visual: visual,
+                    trackerID: tracker.id,
+                    title: tracker.title,
+                    subtitle: visual.displayName
+                )
+            }
+        }
+    }
+
+    /// Says out loud when a combined chart is showing mixed units, rather than
+    /// letting one axis quietly imply they are comparable.
+    func mixedUnitsCaption(for visual: ReportVisual) -> String? {
+        guard visual.combinesTrackers, !sharesOneUnit else { return nil }
+        return "Different units (\(unitSummary)) — compare shapes, not heights."
+    }
+
+    func tracker(_ id: UUID?) -> CustomReportTracker? {
+        guard let id else { return nil }
+        return trackers.first { $0.trackerID == id }
+    }
+}

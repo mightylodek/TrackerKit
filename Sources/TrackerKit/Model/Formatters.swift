@@ -108,6 +108,22 @@ public enum Formatters {
         return "\(dayMonth(interval.start)) – \(dayMonth(end))"
     }
 
+    /// "14" — a date tick on a narrow chart axis.
+    ///
+    /// Day number alone, because "Sep 14" needs width a half-page tile does not
+    /// have and truncates to "Sep…", which tells the reader nothing at all. The
+    /// range is stated above every chart, so the month is never in question.
+    /// Months and years get a label of their own so a long range still reads.
+    public static func axisDate(_ date: Date, calendar: Calendar = .current) -> String {
+        let day = calendar.component(.day, from: date)
+        // The first of a month earns its name, which keeps a multi-month range
+        // readable without widening every other tick.
+        if day == 1 {
+            return date.formatted(.dateTime.month(.abbreviated))
+        }
+        return "\(day)"
+    }
+
     /// "Fri 12 Sep" — a bucket label in a custom report.
     ///
     /// Carries the weekday because these reports are often *about* weekdays: a

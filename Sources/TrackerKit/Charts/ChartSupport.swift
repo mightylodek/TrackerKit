@@ -18,14 +18,26 @@ public struct TrackerAxisStyle: ViewModifier {
         content
             .chartXAxis {
                 if showXAxis {
-                    AxisMarks(values: .automatic(desiredCount: xLabelCount)) { _ in
+                    AxisMarks(values: .automatic(desiredCount: xLabelCount)) { value in
                         AxisGridLine()
                             .foregroundStyle(theme.gridline.opacity(0.6))
                         AxisTick()
                             .foregroundStyle(theme.axis)
-                        AxisValueLabel()
-                            .font(theme.typography.micro)
-                            .foregroundStyle(theme.textMuted)
+                        // Date ticks get a compact label of their own. The
+                        // default runs to "Sep 14", which truncates to "Sep…"
+                        // on a narrow tile and tells the reader nothing.
+                        if let date = value.as(Date.self) {
+                            AxisValueLabel {
+                                Text(Formatters.axisDate(date))
+                                    .font(theme.typography.micro)
+                                    .monospacedDigit()
+                                    .foregroundStyle(theme.textMuted)
+                            }
+                        } else {
+                            AxisValueLabel()
+                                .font(theme.typography.micro)
+                                .foregroundStyle(theme.textMuted)
+                        }
                     }
                 }
             }

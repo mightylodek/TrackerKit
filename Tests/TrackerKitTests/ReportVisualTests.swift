@@ -365,3 +365,135 @@ struct IsolatedPointTests {
 }
 
 #endif
+
+// MARK: - Page layout
+
+/// How many charts fit on a sheet of paper.
+///
+/// Reported after a real print: two charts took two pages, which on US Letter is
+/// absurd — a page is wide, and stacking full-width charts wastes half of it.
+@Suite("Print layout")
+@MainActor
+struct PrintLayoutTests {
+
+    private let engine = CustomReportEngine(calculator: .fixed)
+    private let profileID = UUID()
+
+    private var utc: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        return c
+    }
+
+    private func date(_ d: Int) -> Date {
+        utc.date(from: DateComponents(year: 2026, month: 9, day: d, hour: 12)) ?? .distantPast
+    }
+
+    private func report(visuals: [ReportVisual], habits: Int = 1,
+                        breakdowns: Set<ReportBreakdown> = [.total]) -> CustomReport {
+        let trackers = (0..<habits).map {
+            Tracker(profileID: profileID, title: "Habit \($0)", kind: .duration)
+        }
+        var entries: [UUID: [Entry]] = [:]
+        for tracker in trackers {
+            entries[tracker.id] = (14...20).map {
+                Entry(trackerID: tracker.id, profileID: profileID, date: date($0), value: 10)
+            }
+        }
+        let definition = ReportDefinition(
+            name: "Layout",
+            profileID: profileID,
+            trackerIDs: trackers.map(\.id),
+            range: .absolute(start: date(14), end: date(20)),
+            breakdowns: breakdowns,
+            visuals: visuals
+        )
+        return engine.build(definition, trackers: trackers, entriesByTracker: entries, now: date(21))
+    }
+
+    /// Rendered height at page width.
+    private func height(_ report: CustomReport, layout: ReportVisualsView.Layout) -> CGFloat {
+        let width = CustomReportPDFRenderer.pageSize.width - CustomReportPDFRenderer.margin * 2
+        let renderer = ImageRenderer(
+            content: ReportVisualsView(report: report, layout: layout)
+                .trackerTheme(.standard)
+                .frame(width: width)
+        )
+        renderer.proposedSize = ProposedViewSize(width: width, height: nil)
+        return renderer.uiImage?.size.height ?? 0
+    }
+
+    // MARK: Tiles
+
+    /// A report's visuals are not its charts: a line chart holds every habit,
+    /// an area chart draws one each.
+    @Test("Combined visuals make one tile, per-habit visuals make one each")
+    func tileCounts() {
+        #expect(report(visuals: [.line], habits: 3).chartTiles.count == 1)
+        #expect(report(visuals: [.area], habits: 3).chartTiles.count == 3)
+        #expect(report(visuals: [.area, .line], habits: 2).chartTiles.count == 3)
+    }
+
+    @Test("Every tile is uniquely identified")
+    func tilesHaveDistinctIDs() {
+        let tiles = report(visuals: [.area, .bars, .heatmap], habits: 3).chartTiles
+        #expect(Set(tiles.map(\.id)).count == tiles.count)
+    }
+
+    // MARK: Fitting
+
+    /// The complaint, measured: two charts side by side rather than stacked.
+    @Test("Two charts sit side by side, not one above the other")
+    func twoChartsShareARow() {
+        let two = report(visuals: [.area], habits: 2)
+        #expect(two.chartTiles.count == 2)
+
+        let stacked = height(two, layout: .stacked)
+        let grid = height(two, layout: .grid)
+
+        #expect(grid < stacked * 0.75,
+                "Grid height \(grid) is not meaningfully shorter than stacked \(stacked) — they are still in a column")
+    }
+
+    @Test("Four charts fit the height of a page")
+    func fourChartsFitOnePage() {
+        let four = report(visuals: [.area], habits: 4)
+        #expect(four.chartTiles.count == 4)
+
+        let usable = CustomReportPDFRenderer.pageSize.height - CustomReportPDFRenderer.margin * 2
+        let grid = height(four, layout: .grid)
+
+        // Two rows of tiles, with the header still to fit above them.
+        #expect(grid <= usable - 80,
+                "Four charts render \(grid)pt tall, which will not fit \(usable)pt of page under a header")
+    }
+
+    /// The whole document, not just the charts: a two-chart report should be one
+    /// sheet, which is what it took two of before.
+    @Test("A two-chart report prints on a single page")
+    func twoChartReportIsOnePage() throws {
+        let data = CustomReportPDFRenderer(scale: 1)
+            .render(report(visuals: [.area], habits: 2), appearance: .light, appTheme: .standard)
+        let document = try #require(CGPDFDocument(CGDataProvider(data: data as CFData)!))
+
+        #expect(document.numberOfPages == 1,
+                "A two-chart report still takes \(document.numberOfPages) pages")
+    }
+
+    @Test("A four-chart report stays within two pages")
+    func fourChartReportIsCompact() throws {
+        let data = CustomReportPDFRenderer(scale: 1)
+            .render(report(visuals: [.area], habits: 4), appearance: .light, appTheme: .standard)
+        let document = try #require(CGPDFDocument(CGDataProvider(data: data as CFData)!))
+
+        #expect(document.numberOfPages <= 2,
+                "Four charts and their tables took \(document.numberOfPages) pages")
+    }
+
+    /// On a phone the trade runs the other way: width is scarce, scrolling free.
+    @Test("The screen still stacks")
+    func screenStaysStacked() {
+        let two = report(visuals: [.area], habits: 2)
+        #expect(height(two, layout: .stacked) > height(two, layout: .grid))
+    }
+}

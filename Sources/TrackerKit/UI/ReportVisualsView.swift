@@ -13,46 +13,72 @@ import SwiftUI
 public struct ReportVisualsView: View {
     @Environment(\.trackerTheme) private var theme
 
-    private let report: CustomReport
-    /// Charts render at a fixed height on a PDF page and a flexible one on screen.
-    private let isPaged: Bool
-
-    public init(report: CustomReport, isPaged: Bool = false) {
-        self.report = report
-        self.isPaged = isPaged
+    /// How the charts sit on the page.
+    public enum Layout: Sendable, Hashable {
+        /// One per row, full width. Right for a phone, where width is scarce and
+        /// vertical scrolling is free.
+        case stacked
+        /// Two across. Right for paper, where the opposite is true — a page is
+        /// wide and every new sheet costs something.
+        case grid
     }
+
+    private let report: CustomReport
+    private let layout: Layout
+
+    public init(report: CustomReport, layout: Layout = .stacked) {
+        self.report = report
+        self.layout = layout
+    }
+
+    /// Sized so four tiles fill a Letter page under the header.
+    ///
+    /// 792pt tall, less 36pt margins each side and roughly 90 for the header,
+    /// leaves about 630 for two rows.
+    private var tileHeight: CGFloat { layout == .grid ? 300 : 260 }
+    private var chartHeight: CGFloat { layout == .grid ? 190 : 220 }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: theme.spacing.sectionGap) {
-            ForEach(report.definition.visuals, id: \.self) { visual in
-                visualBlock(visual)
+        switch layout {
+        case .stacked:
+            VStack(alignment: .leading, spacing: theme.spacing.sectionGap) {
+                ForEach(report.chartTiles) { tile in
+                    tileCard(tile)
+                }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func visualBlock(_ visual: ReportVisual) -> some View {
-        TrackerCard(title: visual.displayName, subtitle: caption(for: visual)) {
-            if visual.combinesTrackers {
-                combined(visual)
-            } else {
-                VStack(alignment: .leading, spacing: theme.spacing.lg) {
-                    ForEach(report.trackers) { tracker in
-                        perTracker(visual, tracker: tracker)
-                    }
+        case .grid:
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: theme.spacing.md, alignment: .top),
+                    GridItem(.flexible(), spacing: theme.spacing.md, alignment: .top),
+                ],
+                spacing: theme.spacing.md
+            ) {
+                ForEach(report.chartTiles) { tile in
+                    tileCard(tile)
+                        .frame(height: tileHeight)
                 }
             }
         }
     }
 
-    /// Says out loud when a combined chart is showing mixed units, rather than
-    /// letting one axis quietly imply they're comparable.
-    private func caption(for visual: ReportVisual) -> String? {
-        guard visual.combinesTrackers, !report.sharesOneUnit else { return nil }
-        return "Different units (\(report.unitSummary)) — compare shapes, not heights."
+    // MARK: A tile
+
+    @ViewBuilder
+    private func tileCard(_ tile: ReportChartTile) -> some View {
+        TrackerCard(title: tile.title, subtitle: tile.subtitle) {
+            chart(for: tile)
+        }
     }
 
-    private var chartHeight: CGFloat { isPaged ? 180 : 220 }
+    @ViewBuilder
+    private func chart(for tile: ReportChartTile) -> some View {
+        if let tracker = report.tracker(tile.trackerID) {
+            perTracker(tile.visual, tracker: tracker)
+        } else {
+            combined(tile.visual)
+        }
+    }
 
     @ViewBuilder
     private func combined(_ visual: ReportVisual) -> some View {
@@ -66,7 +92,7 @@ public struct ReportVisualsView: View {
                 .frame(height: chartHeight)
 
         case .bullets:
-            VStack(spacing: theme.spacing.md) {
+            VStack(spacing: theme.spacing.sm) {
                 ForEach(report.trackers) { tracker in
                     BulletChartView(
                         title: tracker.title,
@@ -83,16 +109,17 @@ public struct ReportVisualsView: View {
         case .sparkline:
             VStack(spacing: theme.spacing.sm) {
                 ForEach(report.trackers) { tracker in
-                    HStack(spacing: theme.spacing.md) {
+                    HStack(spacing: theme.spacing.sm) {
                         Text(tracker.title)
                             .font(theme.typography.label)
                             .foregroundStyle(theme.textSecondary)
-                            .frame(width: 110, alignment: .leading)
+                            .lineLimit(1)
+                            .frame(width: 90, alignment: .leading)
                         SparklineView(
                             dailyValues: tracker.dailyValues,
                             color: theme.identityColor(hex: tracker.colorHex)
                         )
-                        .frame(height: 28)
+                        .frame(height: 24)
                         Text(tracker.totalText)
                             .font(theme.typography.label)
                             .foregroundStyle(theme.textPrimary)
@@ -108,28 +135,22 @@ public struct ReportVisualsView: View {
 
     @ViewBuilder
     private func perTracker(_ visual: ReportVisual, tracker: CustomReportTracker) -> some View {
-        VStack(alignment: .leading, spacing: theme.spacing.xs) {
-            Text(tracker.title)
-                .font(theme.typography.label)
-                .foregroundStyle(theme.textSecondary)
-
-            switch visual {
-            case .area:
-                TrackerAreaChart(
-                    values: tracker.dailyValues,
-                    name: tracker.title,
-                    colorHex: tracker.colorHex,
-                    unit: tracker.unit
-                )
-                    .frame(height: chartHeight)
-            case .bars:
-                TrackerGroupedBarChart(series: [tracker.chartSeries(colorIndex: 0)])
-                    .frame(height: chartHeight)
-            case .heatmap:
-                HeatmapCalendarView(values: tracker.dailyValues, unit: tracker.unit)
-            default:
-                EmptyView()
-            }
+        switch visual {
+        case .area:
+            TrackerAreaChart(
+                values: tracker.dailyValues,
+                name: tracker.title,
+                colorHex: tracker.colorHex,
+                unit: tracker.unit
+            )
+            .frame(height: chartHeight)
+        case .bars:
+            TrackerGroupedBarChart(series: [tracker.chartSeries(colorIndex: 0)])
+                .frame(height: chartHeight)
+        case .heatmap:
+            HeatmapCalendarView(values: tracker.dailyValues, unit: tracker.unit)
+        default:
+            EmptyView()
         }
     }
 
@@ -152,7 +173,6 @@ public struct ReportVisualsView: View {
             )
         }
     }
-
 }
 
 #endif
