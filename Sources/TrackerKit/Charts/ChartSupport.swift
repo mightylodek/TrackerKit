@@ -13,6 +13,17 @@ public struct TrackerAxisStyle: ViewModifier {
     let xLabelCount: Int
     let yLabelCount: Int
     let unit: String
+    /// How many days the x axis covers, when it covers days at all.
+    ///
+    /// A week or less is labelled by weekday, because on that span the weekday
+    /// *is* the question — which days did this happen on. Past a week the
+    /// letters repeat and stop identifying anything, so dates take over.
+    let dateSpanDays: Int?
+
+    private var labelsWeekdays: Bool {
+        guard let dateSpanDays else { return false }
+        return dateSpanDays <= 7
+    }
 
     public func body(content: Content) -> some View {
         content
@@ -28,7 +39,9 @@ public struct TrackerAxisStyle: ViewModifier {
                         // on a narrow tile and tells the reader nothing.
                         if let date = value.as(Date.self) {
                             AxisValueLabel {
-                                Text(Formatters.axisDate(date))
+                                Text(labelsWeekdays
+                                     ? Formatters.weekdayInitial(date)
+                                     : Formatters.axisDate(date))
                                     .font(theme.typography.micro)
                                     .monospacedDigit()
                                     .foregroundStyle(theme.textMuted)
@@ -70,14 +83,16 @@ public extension View {
         showY: Bool = true,
         xLabelCount: Int = 5,
         yLabelCount: Int = 4,
-        unit: String = ""
+        unit: String = "",
+        dateSpanDays: Int? = nil
     ) -> some View {
         modifier(TrackerAxisStyle(
             showXAxis: showX,
             showYAxis: showY,
             xLabelCount: xLabelCount,
             yLabelCount: yLabelCount,
-            unit: unit
+            unit: unit,
+            dateSpanDays: dateSpanDays
         ))
     }
 }

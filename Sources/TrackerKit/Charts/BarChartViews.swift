@@ -341,6 +341,17 @@ public struct TrackerGroupedBarChart: View {
         self.height = height ?? 220
     }
 
+    /// A bar's category on the x axis.
+    ///
+    /// This axis is categorical — the x value is the label — so unlike the line
+    /// and area charts it cannot be restyled by the axis modifier. Over a week
+    /// or less the weekday is the question being asked ("which days did this
+    /// happen on"), and "Sep 14" at bar width truncates to "S…" anyway. Past a
+    /// week the letters repeat and stop identifying anything, so dates return.
+    private func label(for point: ChartPoint) -> String {
+        point.label ?? Formatters.axisCategory(for: point.date, spanDays: series.dayCount ?? 0)
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if series.allSatisfy(\.isEmpty) {
@@ -350,7 +361,7 @@ public struct TrackerGroupedBarChart: View {
                     ForEach(series) { item in
                         ForEach(item.points) { point in
                             BarMark(
-                                x: .value("Date", point.label ?? Formatters.dayMonth(point.date)),
+                                x: .value("Date", label(for: point)),
                                 y: .value("Value", point.value),
                                 width: .ratio(0.85)
                             )
@@ -361,7 +372,7 @@ public struct TrackerGroupedBarChart: View {
                     }
                 }
                 .chartLegend(.hidden)
-                .trackerAxes()
+                .trackerAxes(dateSpanDays: series.dayCount)
                 .frame(height: height)
 
                 ChartLegend(series: series)

@@ -647,4 +647,83 @@ struct PageCompositionTests {
     }
 }
 
+
+// MARK: - Weekday axis
+
+/// How a daily chart labels its x axis.
+@Suite("Weekday axis")
+@MainActor
+struct WeekdayAxisTests {
+
+    private var utc: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        return c
+    }
+
+    private func date(_ d: Int) -> Date {
+        utc.date(from: DateComponents(year: 2026, month: 9, day: d, hour: 12)) ?? .distantPast
+    }
+
+    private func series(days: Int) -> ChartSeries {
+        ChartSeries(
+            name: "Reading",
+            points: (0..<days).map { ChartPoint(date: date(14 + $0), value: 10) }
+        )
+    }
+
+    /// `veryShortWeekdaySymbols` gives S M T W T F S — two Ts and two Ss, so
+    /// half the week is ambiguous on the one chart where the weekday is the
+    /// question being asked.
+    @Test("Every weekday is distinguishable")
+    func weekdaysAreUnambiguous() {
+        // Sep 13 2026 is a Sunday, so this walks a full week.
+        let week = (13...19).map { Formatters.weekdayInitial(date($0), calendar: utc) }
+        #expect(week == ["Su", "M", "T", "W", "Th", "F", "Sa"])
+        #expect(Set(week).count == 7, "Two days share a label")
+    }
+
+    @Test("A series knows how many days it spans")
+    func spanIsCounted() {
+        #expect(series(days: 7).dayCount == 7)
+        #expect(series(days: 1).dayCount == 1)
+        #expect(ChartSeries(name: "x", points: []).dayCount == nil)
+    }
+
+    @Test("The widest series decides the axis")
+    func widestSeriesWins() {
+        #expect([series(days: 3), series(days: 9)].dayCount == 9)
+        #expect([ChartSeries]().dayCount == nil)
+    }
+
+    /// A bar chart's x axis is categorical — the value *is* the label — so it
+    /// cannot be restyled by the axis modifier the way the line and area charts
+    /// are. It picks its own, and this is that decision.
+    @Test("Bars are labelled by weekday over a week, by date beyond one")
+    func barCategories() {
+        // Sep 14 2026 is a Monday.
+        #expect(Formatters.axisCategory(for: date(14), spanDays: 7, calendar: utc) == "M")
+        #expect(Formatters.axisCategory(for: date(14), spanDays: 1, calendar: utc) == "M")
+        #expect(Formatters.axisCategory(for: date(14), spanDays: 8, calendar: utc)
+                == Formatters.dayMonth(date(14)))
+        // An empty chart has no span to reason about and keeps dates.
+        #expect(Formatters.axisCategory(for: date(14), spanDays: 0, calendar: utc)
+                == Formatters.dayMonth(date(14)))
+    }
+
+    /// The boundary: a week reads as weekdays, longer reads as dates, because
+    /// past seven days the letters repeat and identify nothing.
+    @Test("Charts render at the boundary and either side of it")
+    func rendersAcrossTheBoundary() {
+        for days in [1, 7, 8, 30] {
+            let chart = TrackerGroupedBarChart(series: [series(days: days)])
+                .frame(width: 300, height: 200)
+                .trackerTheme(.nocturne)
+            let renderer = ImageRenderer(content: chart)
+            renderer.scale = 1
+            #expect(renderer.uiImage != nil, "A \(days)-day bar chart failed to render")
+        }
+    }
+}
+
 #endif

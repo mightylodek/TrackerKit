@@ -124,6 +124,39 @@ public enum Formatters {
         return "\(day)"
     }
 
+    /// "M", "T", "W", "Th", "F", "Sa", "Su" — a weekday on a chart axis.
+    ///
+    /// Not `veryShortWeekdaySymbols`, which gives S M T W T F S: two Ts and two
+    /// Ss, so half the week is ambiguous on exactly the chart where the weekday
+    /// is the point. Tuesday and Thursday, Saturday and Sunday get the extra
+    /// letter they need.
+    public static func weekdayInitial(_ date: Date, calendar: Calendar = .current) -> String {
+        switch calendar.component(.weekday, from: date) {
+        case 1: "Su"
+        case 2: "M"
+        case 3: "T"
+        case 4: "W"
+        case 5: "Th"
+        case 6: "F"
+        default: "Sa"
+        }
+    }
+
+    /// The category a bar sits under on a day-by-day chart.
+    ///
+    /// Over a week or less the weekday is the question being asked — which days
+    /// did this happen on — and "Sep 14" truncates to "S…" at bar width anyway.
+    /// Past a week the letters repeat and stop identifying anything, so dates
+    /// return.
+    public static func axisCategory(
+        for date: Date,
+        spanDays: Int,
+        calendar: Calendar = .current
+    ) -> String {
+        guard spanDays > 0, spanDays <= 7 else { return dayMonth(date) }
+        return weekdayInitial(date, calendar: calendar)
+    }
+
     /// "Sun 13" — a bucket label in a narrow column.
     ///
     /// "Sun, Sep 13" needs width a half-tile column does not have and truncates

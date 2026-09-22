@@ -64,6 +64,20 @@ public struct ChartSeries: Identifiable, Sendable, Hashable {
         return palette.seriesColor(colorIndex)
     }
 
+    /// How many days this series spans, inclusive, or `nil` when it holds no
+    /// points. Used to decide whether an axis labels weekdays or dates.
+    var dayCount: Int? {
+        let dates = points.map(\.date)
+        guard let first = dates.min(), let last = dates.max() else { return nil }
+        let calendar = Calendar.current
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: first),
+            to: calendar.startOfDay(for: last)
+        ).day ?? 0
+        return days + 1
+    }
+
     /// Contiguous runs of real data.
     ///
     /// Swift Charts joins consecutive points in a series, so a day with nothing
@@ -321,5 +335,15 @@ public struct FlowLayout: Layout {
             x += size.width + spacing
             lineHeight = max(lineHeight, size.height)
         }
+    }
+}
+
+public extension Array where Element == ChartSeries {
+    /// The widest span any series covers, in days.
+    ///
+    /// `nil` when nothing is plotted, which leaves the axis on dates rather than
+    /// guessing at a weekday label for an empty chart.
+    var dayCount: Int? {
+        compactMap(\.dayCount).max()
     }
 }

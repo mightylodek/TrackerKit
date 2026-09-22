@@ -205,7 +205,7 @@ public struct TrackerLineChart: View {
         .chartLegend(.hidden)
         .chartYScale(domain: domain)
         .chartXSelection(value: $selectedDate)
-        .trackerAxes(showX: showAxes, showY: showAxes)
+        .trackerAxes(showX: showAxes, showY: showAxes, dateSpanDays: series.dayCount)
         .frame(height: height)
     }
 
