@@ -3,80 +3,37 @@
 
 import SwiftUI
 
-// MARK: - ReportVisualsView
+// MARK: - ReportChartTileView
 
-/// The charts a report carries, drawn from its filtered data.
+/// One chart in its card.
 ///
-/// Every chart here reads from the built ``CustomReport`` rather than the store,
-/// which is the whole point: what you see is exactly the range, weekday filter
-/// and habit selection the report says it is.
-public struct ReportVisualsView: View {
+/// The single place a report chart is built, so the screen and the printed page
+/// draw the same thing rather than two implementations that drift apart.
+public struct ReportChartTileView: View {
     @Environment(\.trackerTheme) private var theme
 
-    /// How the charts sit on the page.
-    public enum Layout: Sendable, Hashable {
-        /// One per row, full width. Right for a phone, where width is scarce and
-        /// vertical scrolling is free.
-        case stacked
-        /// Two across. Right for paper, where the opposite is true — a page is
-        /// wide and every new sheet costs something.
-        case grid
-    }
-
     private let report: CustomReport
-    private let layout: Layout
+    private let tile: ReportChartTile
+    private let chartHeight: CGFloat
 
-    public init(report: CustomReport, layout: Layout = .stacked) {
+    public init(report: CustomReport, tile: ReportChartTile, chartHeight: CGFloat) {
         self.report = report
-        self.layout = layout
+        self.tile = tile
+        self.chartHeight = chartHeight
     }
-
-    /// Sized so four tiles fill a Letter page under the header.
-    ///
-    /// 792pt tall, less 36pt margins each side and roughly 90 for the header,
-    /// leaves about 630 for two rows.
-    private var tileHeight: CGFloat { layout == .grid ? 300 : 260 }
-    private var chartHeight: CGFloat { layout == .grid ? 190 : 220 }
 
     public var body: some View {
-        switch layout {
-        case .stacked:
-            VStack(alignment: .leading, spacing: theme.spacing.sectionGap) {
-                ForEach(report.chartTiles) { tile in
-                    tileCard(tile)
-                }
-            }
-        case .grid:
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: theme.spacing.md, alignment: .top),
-                    GridItem(.flexible(), spacing: theme.spacing.md, alignment: .top),
-                ],
-                spacing: theme.spacing.md
-            ) {
-                ForEach(report.chartTiles) { tile in
-                    tileCard(tile)
-                        .frame(height: tileHeight)
-                }
-            }
-        }
-    }
-
-    // MARK: A tile
-
-    @ViewBuilder
-    private func tileCard(_ tile: ReportChartTile) -> some View {
         TrackerCard(title: tile.title, subtitle: tile.subtitle) {
-            chart(for: tile)
-        }
-    }
-
-    @ViewBuilder
-    private func chart(for tile: ReportChartTile) -> some View {
-        if let tracker = report.tracker(tile.trackerID) {
-            perTracker(tile.visual, tracker: tracker)
-        } else {
-            combined(tile.visual)
+            Group {
+                if let tracker = report.tracker(tile.trackerID) {
+                    perTracker(tile.visual, tracker: tracker)
+                } else {
+                    combined(tile.visual)
+                }
+            }
+            // The topmost y-axis label sits flush with the plot edge and was
+            // colliding with the card's subtitle above it.
+            .padding(.top, theme.spacing.xs)
         }
     }
 
@@ -114,16 +71,17 @@ public struct ReportVisualsView: View {
                             .font(theme.typography.label)
                             .foregroundStyle(theme.textSecondary)
                             .lineLimit(1)
-                            .frame(width: 90, alignment: .leading)
+                            .frame(width: 80, alignment: .leading)
                         SparklineView(
                             dailyValues: tracker.dailyValues,
                             color: theme.identityColor(hex: tracker.colorHex)
                         )
-                        .frame(height: 24)
+                        .frame(height: 22)
                         Text(tracker.totalText)
                             .font(theme.typography.label)
                             .foregroundStyle(theme.textPrimary)
                             .monospacedDigit()
+                            .lineLimit(1)
                     }
                 }
             }
@@ -154,8 +112,6 @@ public struct ReportVisualsView: View {
         }
     }
 
-    // MARK: Goal-derived input
-
     /// Rings need a target. A habit with no goal in the window is left out
     /// rather than drawn as a ring against nothing.
     private var rings: [RingData] {
@@ -171,6 +127,61 @@ public struct ReportVisualsView: View {
                 status: fraction >= 1 ? .green : (fraction >= 0.6 ? .yellow : .red),
                 breachesLimit: tracker.goal?.direction == .atMost && fraction > 1
             )
+        }
+    }
+}
+
+// MARK: - ReportVisualsView
+
+/// A report's charts, drawn from its filtered data.
+///
+/// Every chart reads from the built ``CustomReport`` rather than the store,
+/// which is the point: what you see is exactly the range, weekday filter and
+/// habit selection the report says it is.
+public struct ReportVisualsView: View {
+    @Environment(\.trackerTheme) private var theme
+
+    /// How the charts sit.
+    public enum Layout: Sendable, Hashable {
+        /// One per row, full width. Right for a phone, where width is scarce and
+        /// vertical scrolling is free.
+        case stacked
+        /// Two across. Right for paper, where the opposite is true.
+        case grid
+    }
+
+    private let report: CustomReport
+    private let layout: Layout
+
+    public init(report: CustomReport, layout: Layout = .stacked) {
+        self.report = report
+        self.layout = layout
+    }
+
+    private var tileHeight: CGFloat { 300 }
+    private var chartHeight: CGFloat { layout == .grid ? 190 : 220 }
+
+    public var body: some View {
+        switch layout {
+        case .stacked:
+            VStack(alignment: .leading, spacing: theme.spacing.sectionGap) {
+                ForEach(report.chartTiles) { tile in
+                    ReportChartTileView(report: report, tile: tile, chartHeight: chartHeight)
+                }
+            }
+        case .grid:
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: theme.spacing.md, alignment: .top),
+                    GridItem(.flexible(), spacing: theme.spacing.md, alignment: .top),
+                ],
+                spacing: theme.spacing.md
+            ) {
+                ForEach(report.chartTiles) { tile in
+                    ReportChartTileView(report: report, tile: tile, chartHeight: chartHeight)
+                        .frame(height: tileHeight)
+                }
+            }
         }
     }
 }

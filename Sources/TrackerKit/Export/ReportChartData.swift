@@ -122,8 +122,49 @@ public extension CustomReport {
         return "Different units (\(unitSummary)) — compare shapes, not heights."
     }
 
+    /// How many tiles a printed page has to hold: every chart, plus one block of
+    /// numbers per habit.
+    var pageTileCount: Int { chartTiles.count + trackers.count }
+
     func tracker(_ id: UUID?) -> CustomReportTracker? {
         guard let id else { return nil }
         return trackers.first { $0.trackerID == id }
+    }
+}
+
+// MARK: - ReportPageTile
+
+/// One cell on a printed page. Charts and numbers are laid out alike.
+public enum ReportPageTile: Identifiable, Sendable, Hashable {
+    case chart(ReportChartTile)
+    case numbers(trackerID: UUID)
+
+    public var id: String {
+        switch self {
+        case .chart(let tile): "chart-\(tile.id)"
+        case .numbers(let id): "numbers-\(id.uuidString)"
+        }
+    }
+}
+
+public extension CustomReport {
+
+    /// Every cell the printed report needs: each chart, then each habit's
+    /// numbers.
+    var pageTiles: [ReportPageTile] {
+        chartTiles.map(ReportPageTile.chart) + trackers.map { .numbers(trackerID: $0.trackerID) }
+    }
+
+    /// Tiles grouped into pages.
+    ///
+    /// Pages are built explicitly rather than by slicing one tall image at page
+    /// height: a blind slice cuts whichever tile straddles the boundary, and
+    /// half a table at the foot of a sheet is worse than a blank half-page.
+    func pageTiles(perPage: Int) -> [[ReportPageTile]] {
+        let all = pageTiles
+        guard perPage > 0, !all.isEmpty else { return all.isEmpty ? [] : [all] }
+        return stride(from: 0, to: all.count, by: perPage).map {
+            Array(all[$0..<min($0 + perPage, all.count)])
+        }
     }
 }

@@ -124,6 +124,16 @@ public enum Formatters {
         return "\(day)"
     }
 
+    /// "Sun 13" — a bucket label in a narrow column.
+    ///
+    /// "Sun, Sep 13" needs width a half-tile column does not have and truncates
+    /// to "Sun, Se…", which loses the date entirely — the one part of the row
+    /// that identifies it. The month is stated in the report header.
+    public static func compactDay(_ date: Date, calendar: Calendar = .current) -> String {
+        let weekday = date.formatted(.dateTime.weekday(.abbreviated))
+        return "\(weekday) \(calendar.component(.day, from: date))"
+    }
+
     /// "Fri 12 Sep" — a bucket label in a custom report.
     ///
     /// Carries the weekday because these reports are often *about* weekdays: a

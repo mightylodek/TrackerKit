@@ -25,7 +25,41 @@ public struct CustomReportPDFRenderer {
 
     /// US Letter at 72dpi, matching the existing report renderer.
     public static let pageSize = CGSize(width: 612, height: 792)
+    public static let landscapePageSize = CGSize(width: 792, height: 612)
     public static let margin: CGFloat = 36
+
+    /// Which way round the paper goes.
+    public enum Orientation: String, Sendable, CaseIterable, Hashable {
+        case portrait
+        case landscape
+
+        public var size: CGSize {
+            self == .portrait ? pageSize : landscapePageSize
+        }
+
+        public var displayName: String {
+            self == .portrait ? "Portrait" : "Landscape"
+        }
+    }
+
+    /// Landscape once there is more than one row to fill.
+    ///
+    /// Four tiles across a landscape sheet get a sensible aspect each; the same
+    /// four stacked down a portrait one squeeze into letterbox strips.
+    public static func suggestedOrientation(for report: CustomReport) -> Orientation {
+        report.pageTileCount > 2 ? .landscape : .portrait
+    }
+
+    /// Grid shape per page.
+    ///
+    /// Chosen so whole rows fit the sheet with the header above them, which is
+    /// what lets pages be built tile by tile instead of sliced.
+    static func grid(for orientation: Orientation) -> (columns: Int, rows: Int, tileHeight: CGFloat) {
+        switch orientation {
+        case .portrait: (2, 2, 300)
+        case .landscape: (3, 2, 240)
+        }
+    }
 
     /// The theme a report prints in.
     ///
@@ -59,37 +93,38 @@ public struct CustomReportPDFRenderer {
     }
 
     /// Renders in the appearance chosen for this export.
-    public func render(_ report: CustomReport, appearance: Appearance, appTheme: TrackerTheme) -> Data {
+    public func render(
+        _ report: CustomReport,
+        appearance: Appearance,
+        appTheme: TrackerTheme,
+        orientation: Orientation? = nil
+    ) -> Data {
+        let page = orientation ?? Self.suggestedOrientation(for: report)
         switch appearance {
         case .light:
-            return render(report, theme: .standard, colorScheme: .light)
+            return render(report, theme: .standard, colorScheme: .light, orientation: page)
         case .matchApp:
-            return render(report, theme: appTheme, colorScheme: appTheme.preferredColorScheme ?? .light)
+            return render(
+                report,
+                theme: appTheme,
+                colorScheme: appTheme.preferredColorScheme ?? .light,
+                orientation: page
+            )
         }
     }
 
     public func render(
         _ report: CustomReport,
         theme: TrackerTheme = .standard,
-        colorScheme: ColorScheme = .light
+        colorScheme: ColorScheme = .light,
+        orientation: Orientation = .portrait
     ) -> Data {
-        let contentWidth = Self.pageSize.width - Self.margin * 2
-
-        let document = CustomReportDocumentView(report: report)
-            .trackerTheme(theme)
-            .environment(\.colorScheme, colorScheme)
-            .frame(width: contentWidth)
-            .background(theme.plane)
-
-        let renderer = ImageRenderer(content: document)
-        renderer.scale = scale
-        renderer.proposedSize = ProposedViewSize(width: contentWidth, height: nil)
-
-        guard let image = renderer.uiImage, image.size.height > 0 else { return Data() }
-
-        let usableHeight = Self.pageSize.height - Self.margin * 2
-        let pageCount = max(1, Int(ceil(image.size.height / usableHeight)))
-        let bounds = CGRect(origin: .zero, size: Self.pageSize)
+        let pageSize = orientation.size
+        let bounds = CGRect(origin: .zero, size: pageSize)
+        let contentWidth = pageSize.width - Self.margin * 2
+        let contentHeight = pageSize.height - Self.margin * 2
+        let shape = Self.grid(for: orientation)
+        let pages = report.pageTiles(perPage: shape.columns * shape.rows)
 
         // Resolve the ground once, against the appearance being drawn, rather
         // than letting a dynamic colour pick the device's.
@@ -97,7 +132,46 @@ public struct CustomReportPDFRenderer {
             with: UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)
         )
 
-        return paginate(image, ground: ground)
+        let pdf = UIGraphicsPDFRenderer(bounds: bounds)
+        return pdf.pdfData { context in
+            // A report with nothing in it still owes the reader a sheet.
+            guard !pages.isEmpty else {
+                context.beginPage()
+                ground.setFill()
+                context.fill(bounds)
+                return
+            }
+
+            for (index, tiles) in pages.enumerated() {
+                context.beginPage()
+                ground.setFill()
+                context.fill(bounds)
+
+                let page = CustomReportPageView(
+                    report: report,
+                    tiles: tiles,
+                    columns: shape.columns,
+                    tileHeight: shape.tileHeight,
+                    pageNumber: index + 1,
+                    pageCount: pages.count
+                )
+                .trackerTheme(theme)
+                .environment(\.colorScheme, colorScheme)
+                .frame(width: contentWidth)
+
+                let renderer = ImageRenderer(content: page)
+                renderer.scale = scale
+                renderer.proposedSize = ProposedViewSize(width: contentWidth, height: contentHeight)
+
+                guard let image = renderer.uiImage else { continue }
+                image.draw(in: CGRect(
+                    x: Self.margin,
+                    y: Self.margin,
+                    width: contentWidth,
+                    height: min(image.size.height, contentHeight)
+                ))
+            }
+        }
     }
 
     /// Slices a tall image across PDF pages.
@@ -105,10 +179,10 @@ public struct CustomReportPDFRenderer {
     /// Split out from `render` so a test can feed it an image whose corners are
     /// known and check where they land. Orientation is exactly the kind of thing
     /// that looks fine in a thumbnail and comes out of a printer upside down.
-    func paginate(_ image: UIImage, ground: UIColor) -> Data {
-        let usableHeight = Self.pageSize.height - Self.margin * 2
+    func paginate(_ image: UIImage, ground: UIColor, pageSize: CGSize = CustomReportPDFRenderer.pageSize) -> Data {
+        let usableHeight = pageSize.height - Self.margin * 2
         let pageCount = max(1, Int(ceil(image.size.height / usableHeight)))
-        let bounds = CGRect(origin: .zero, size: Self.pageSize)
+        let bounds = CGRect(origin: .zero, size: pageSize)
 
         let pdf = UIGraphicsPDFRenderer(bounds: bounds)
         return pdf.pdfData { context in
@@ -132,7 +206,7 @@ public struct CustomReportPDFRenderer {
                     in: CGRect(
                         x: Self.margin,
                         y: Self.margin,
-                        width: Self.pageSize.width - Self.margin * 2,
+                        width: pageSize.width - Self.margin * 2,
                         height: sliceHeight
                     )
                 )
@@ -145,6 +219,7 @@ public struct CustomReportPDFRenderer {
         _ report: CustomReport,
         appearance: Appearance = .light,
         appTheme: TrackerTheme = .nocturne,
+        orientation: Orientation? = nil,
         to directory: URL? = nil
     ) throws -> URL {
         let folder = directory ?? FileManager.default.temporaryDirectory
@@ -154,7 +229,8 @@ public struct CustomReportPDFRenderer {
             .joined(separator: "-")
         let stem = safeName.isEmpty ? "report" : safeName
         let url = folder.appendingPathComponent("\(stem)-\(Formatters.fileStamp()).pdf")
-        try render(report, appearance: appearance, appTheme: appTheme).write(to: url, options: .atomic)
+        try render(report, appearance: appearance, appTheme: appTheme, orientation: orientation)
+            .write(to: url, options: .atomic)
         return url
     }
 
@@ -171,53 +247,91 @@ public struct CustomReportPDFRenderer {
     }
 }
 
-// MARK: - CustomReportDocumentView
+// MARK: - CustomReportPageView
 
-/// The report laid out for paper: charts, then the numbers.
+/// One sheet: a one-line masthead and a grid of tiles.
 ///
 /// Separate from ``CustomReportView`` because a page is not a screen — no
-/// navigation chrome, no scroll view, and the header repeats information a
-/// reader who wasn't there needs.
-struct CustomReportDocumentView: View {
+/// navigation chrome, no scrolling, and a header that repeats what a reader who
+/// wasn't there needs to know, in one line rather than three.
+struct CustomReportPageView: View {
     @Environment(\.trackerTheme) private var theme
 
+    /// Height a ``TrackerCard`` adds around its content: title, subtitle, card
+    /// padding, and the few points of clearance the plot's top axis label needs.
+    ///
+    /// Measured, not guessed — and guarded by a test, because the last four
+    /// points of it arrived with a `.padding(.top)` that pushed every chart tile
+    /// past its cell and into the row below.
+    static let cardChrome: CGFloat = 94
+
     let report: CustomReport
+    let tiles: [ReportPageTile]
+    let columns: Int
+    let tileHeight: CGFloat
+    let pageNumber: Int
+    let pageCount: Int
+
+    private var gridColumns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: theme.spacing.sm, alignment: .top),
+            count: max(1, columns)
+        )
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: theme.spacing.sectionGap) {
-            VStack(alignment: .leading, spacing: theme.spacing.xs) {
-                Text(report.title)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(theme.textPrimary)
-                Text(report.rangeText)
-                    .font(theme.typography.heading)
-                    .foregroundStyle(theme.textSecondary)
-                Text(subtitle)
-                    .font(theme.typography.label)
-                    .foregroundStyle(theme.textMuted)
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            header
+
+            LazyVGrid(columns: gridColumns, spacing: theme.spacing.sm) {
+                ForEach(tiles) { tile in
+                    view(for: tile)
+                        .frame(height: tileHeight)
+                }
             }
 
-            if !report.definition.visuals.isEmpty {
-                // Two across on paper. Stacked full-width charts cost a page per
-                // two, which is absurd on a sheet this size.
-                ReportVisualsView(report: report, layout: .grid)
-            }
+            Spacer(minLength: 0)
+        }
+    }
 
-            ForEach(report.trackers) { tracker in
-                ReportTrackerTable(tracker: tracker)
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: theme.spacing.sm) {
+            Text(report.title)
+                .font(theme.typography.heading)
+                .foregroundStyle(theme.textPrimary)
+            Text(report.rangeText)
+                .font(theme.typography.label)
+                .foregroundStyle(theme.textSecondary)
+            Spacer(minLength: theme.spacing.sm)
+            Text(subtitle)
+                .font(theme.typography.micro)
+                .foregroundStyle(theme.textMuted)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private func view(for tile: ReportPageTile) -> some View {
+        switch tile {
+        case .chart(let chart):
+            // 90pt of card chrome above the plot — title, subtitle and padding,
+            // measured rather than guessed at.
+            ReportChartTileView(report: report, tile: chart, chartHeight: tileHeight - Self.cardChrome)
+        case .numbers(let trackerID):
+            if let tracker = report.tracker(trackerID) {
+                ReportTrackerTable(tracker: tracker, isCompact: true)
             }
         }
-        .padding(theme.spacing.md)
     }
 
     private var subtitle: String {
         var parts: [String] = []
-        parts.append(report.trackers.map(\.title).joined(separator: ", "))
         if let days = report.definition.weekdaySummary { parts.append(days) }
         if report.definition.breakdowns.contains(.weekly) {
             parts.append("weeks from \(report.definition.weekStartName)")
         }
-        parts.append("generated \(Formatters.dayMonth(report.generatedAt))")
+        parts.append(Formatters.dayMonth(report.generatedAt))
+        if pageCount > 1 { parts.append("\(pageNumber)/\(pageCount)") }
         return parts.joined(separator: " · ")
     }
 }

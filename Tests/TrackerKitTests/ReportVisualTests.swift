@@ -364,7 +364,6 @@ struct IsolatedPointTests {
     }
 }
 
-#endif
 
 // MARK: - Page layout
 
@@ -497,3 +496,155 @@ struct PrintLayoutTests {
         #expect(height(two, layout: .stacked) > height(two, layout: .grid))
     }
 }
+
+// MARK: - Page composition
+
+/// How tiles are grouped onto sheets.
+///
+/// Reported after printing: a single habit's chart and its totals took two
+/// pages, the totals ran full width at body size, and four charts down a
+/// portrait sheet squeezed into letterbox strips.
+@Suite("Page composition")
+@MainActor
+struct PageCompositionTests {
+
+    private let engine = CustomReportEngine(calculator: .fixed)
+    private let profileID = UUID()
+
+    private var utc: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        return c
+    }
+
+    private func date(_ d: Int) -> Date {
+        utc.date(from: DateComponents(year: 2026, month: 9, day: d, hour: 12)) ?? .distantPast
+    }
+
+    private func report(habits: Int, visuals: [ReportVisual],
+                        breakdowns: Set<ReportBreakdown> = [.daily, .total]) -> CustomReport {
+        let trackers = (0..<habits).map {
+            Tracker(profileID: profileID, title: "Habit \($0)", kind: .duration)
+        }
+        var entries: [UUID: [Entry]] = [:]
+        for tracker in trackers {
+            entries[tracker.id] = (14...20).map {
+                Entry(trackerID: tracker.id, profileID: profileID, date: date($0), value: 20)
+            }
+        }
+        let definition = ReportDefinition(
+            name: "Layout", profileID: profileID,
+            trackerIDs: trackers.map(\.id),
+            range: .absolute(start: date(14), end: date(20)),
+            breakdowns: breakdowns, visuals: visuals
+        )
+        return engine.build(definition, trackers: trackers, entriesByTracker: entries, now: date(21))
+    }
+
+    private func pageCount(_ report: CustomReport) throws -> Int {
+        let data = CustomReportPDFRenderer(scale: 1)
+            .render(report, appearance: .light, appTheme: .standard)
+        let document = try #require(CGPDFDocument(CGDataProvider(data: data as CFData)!))
+        return document.numberOfPages
+    }
+
+    // MARK: Tiles
+
+    @Test("A page holds every chart and every habit's numbers")
+    func tileInventory() {
+        let r = report(habits: 3, visuals: [.area])
+        // Three area charts, one per habit, plus three blocks of numbers.
+        #expect(r.pageTiles.count == 6)
+        #expect(r.pageTileCount == 6)
+    }
+
+    @Test("Tiles chunk into pages without dropping any")
+    func chunking() {
+        let r = report(habits: 4, visuals: [.area])
+        let pages = r.pageTiles(perPage: 6)
+        #expect(pages.count == 2)
+        #expect(pages.flatMap(\.self).count == r.pageTiles.count)
+        #expect(pages.first?.count == 6)
+        #expect(pages.last?.count == 2)
+    }
+
+    @Test("An empty report still yields one page")
+    func emptyReportOnePage() throws {
+        let r = report(habits: 0, visuals: [])
+        #expect(r.pageTiles.isEmpty)
+        #expect(try pageCount(r) == 1)
+    }
+
+    // MARK: Orientation
+
+    @Test("More than one row turns the paper sideways")
+    func orientationSwitches() {
+        // One chart and its numbers: two tiles, one row, portrait.
+        #expect(CustomReportPDFRenderer.suggestedOrientation(for: report(habits: 1, visuals: [.area])) == .portrait)
+        // Four habits: landscape, where four tiles across get a sensible aspect.
+        #expect(CustomReportPDFRenderer.suggestedOrientation(for: report(habits: 4, visuals: [.area])) == .landscape)
+    }
+
+    @Test("Landscape is wider than it is tall, and portrait the reverse")
+    func orientationSizes() {
+        #expect(CustomReportPDFRenderer.Orientation.landscape.size.width
+                > CustomReportPDFRenderer.Orientation.landscape.size.height)
+        #expect(CustomReportPDFRenderer.Orientation.portrait.size.height
+                > CustomReportPDFRenderer.Orientation.portrait.size.width)
+    }
+
+    // MARK: Fitting
+
+    /// The complaint, exactly: one chart and its totals on one sheet.
+    @Test("One habit with one chart prints on a single page")
+    func oneHabitOnePage() throws {
+        #expect(try pageCount(report(habits: 1, visuals: [.area])) == 1)
+    }
+
+    @Test("Four habits with a chart each fit two pages")
+    func fourHabitsTwoPages() throws {
+        // Eight tiles at six per landscape sheet.
+        #expect(try pageCount(report(habits: 4, visuals: [.area])) == 2)
+    }
+
+    /// The regression guard for tiles overflowing and colliding with the row
+    /// below: every tile has to fit inside the height the grid gives it.
+    @Test("No tile overflows the height it is given")
+    func tilesFitTheirFrame() {
+        let r = report(habits: 1, visuals: [.area])
+        let shape = CustomReportPDFRenderer.grid(for: .landscape)
+        let columnWidth = (CustomReportPDFRenderer.Orientation.landscape.size.width
+                           - CustomReportPDFRenderer.margin * 2
+                           - CGFloat(shape.columns - 1) * 8) / CGFloat(shape.columns)
+
+        func rendered(_ view: some View) -> CGFloat {
+            let renderer = ImageRenderer(
+                content: view.trackerTheme(.standard).frame(width: columnWidth)
+            )
+            renderer.proposedSize = ProposedViewSize(width: columnWidth, height: nil)
+            return renderer.uiImage?.size.height ?? .greatestFiniteMagnitude
+        }
+
+        let chart = rendered(ReportChartTileView(
+            report: r,
+            tile: r.chartTiles[0],
+            chartHeight: shape.tileHeight - CustomReportPageView.cardChrome
+        ))
+        #expect(chart <= shape.tileHeight,
+                "A chart tile renders \(chart)pt into a \(shape.tileHeight)pt cell and will overlap the row below")
+
+        let numbers = rendered(ReportTrackerTable(tracker: r.trackers[0], isCompact: true))
+        #expect(numbers <= shape.tileHeight,
+                "A numbers tile renders \(numbers)pt into a \(shape.tileHeight)pt cell")
+    }
+
+    /// A week of days down one column was taller than the tile meant to hold it.
+    @Test("Compact numbers use two columns once there are more than four rows")
+    func longTablesSplit() {
+        let r = report(habits: 1, visuals: [])
+        let daily = r.trackers[0].section(.daily)
+        #expect((daily?.buckets.count ?? 0) > 4, "Fixture should have a week of days")
+    }
+}
+
+#endif

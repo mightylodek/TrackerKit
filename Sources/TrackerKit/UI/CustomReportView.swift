@@ -127,16 +127,27 @@ struct ReportTrackerTable: View {
     @Environment(\.trackerTheme) private var theme
 
     let tracker: CustomReportTracker
+    /// Print sizing: smaller type and tighter rows, so a week of days is a
+    /// quarter of a page rather than half of one.
+    var isCompact: Bool = false
+
+    init(tracker: CustomReportTracker, isCompact: Bool = false) {
+        self.tracker = tracker
+        self.isCompact = isCompact
+    }
 
     var body: some View {
         TrackerCard(title: tracker.title, subtitle: tracker.totalText) {
-            VStack(alignment: .leading, spacing: theme.spacing.lg) {
+            VStack(alignment: .leading, spacing: isCompact ? theme.spacing.sm : theme.spacing.lg) {
                 ForEach(tracker.sections) { section in
                     breakdownBlock(section, unit: tracker.unit)
                 }
             }
         }
     }
+
+    private var rowFont: Font { isCompact ? theme.typography.label : theme.typography.body }
+    private var rowPadding: CGFloat { isCompact ? 1 : theme.spacing.xs }
 
     @ViewBuilder
     private func breakdownBlock(_ section: CustomReportSection, unit: String) -> some View {
@@ -149,7 +160,7 @@ struct ReportTrackerTable: View {
                         .foregroundStyle(theme.textSecondary)
                     Spacer()
                     Text(Formatters.value(bucket.value, unit: unit))
-                        .font(theme.typography.heading)
+                        .font(isCompact ? theme.typography.subheadline : theme.typography.heading)
                         .foregroundStyle(theme.textPrimary)
                         .monospacedDigit()
                 }
@@ -158,32 +169,59 @@ struct ReportTrackerTable: View {
                     .font(theme.typography.label)
                     .foregroundStyle(theme.textSecondary)
 
-                VStack(spacing: 0) {
-                    ForEach(Array(section.buckets.enumerated()), id: \.element.id) { index, bucket in
-                        if index > 0 {
-                            Divider().overlay(theme.border)
-                        }
-                        bucketRow(bucket, unit: unit)
+                if isCompact && section.buckets.count > 4 {
+                    // Two columns on paper. A week of days down one column is
+                    // 272pt — taller than the tile meant to hold it — and the
+                    // height grows with the range, so a single column can never
+                    // be made to fit in general.
+                    let split = (section.buckets.count + 1) / 2
+                    HStack(alignment: .top, spacing: theme.spacing.md) {
+                        bucketColumn(Array(section.buckets.prefix(split)), unit: unit)
+                        bucketColumn(Array(section.buckets.dropFirst(split)), unit: unit)
                     }
+                } else {
+                    bucketColumn(section.buckets, unit: unit)
                 }
             }
         }
     }
 
+    /// Daily buckets shorten to "Sun 13" in a narrow column; anything coarser
+    /// (a month, a year) is already short and keeps its own label.
+    private func compactLabel(_ bucket: ReportBucket) -> String {
+        let span = bucket.interval.duration
+        guard span <= 60 * 60 * 36 else { return bucket.label }
+        return Formatters.compactDay(bucket.interval.start)
+    }
+
+    private func bucketColumn(_ buckets: [ReportBucket], unit: String) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
+                if index > 0 {
+                    Divider().overlay(theme.border)
+                }
+                bucketRow(bucket, unit: unit)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private func bucketRow(_ bucket: ReportBucket, unit: String) -> some View {
         HStack {
-            Text(bucket.label)
-                .font(theme.typography.body)
+            Text(isCompact ? compactLabel(bucket) : bucket.label)
+                .font(rowFont)
                 .foregroundStyle(bucket.isEmpty ? theme.textSecondary : theme.textPrimary)
-            Spacer()
+                .lineLimit(1)
+            Spacer(minLength: theme.spacing.sm)
             // "Nothing logged" rather than a zero: a habit you can legitimately
             // do none of on purpose reads very differently from one you forgot.
             Text(bucket.isEmpty ? "—" : Formatters.value(bucket.value, unit: unit))
-                .font(theme.typography.body)
+                .font(rowFont)
                 .foregroundStyle(bucket.isEmpty ? theme.textMuted : theme.textPrimary)
                 .monospacedDigit()
+                .lineLimit(1)
         }
-        .padding(.vertical, theme.spacing.xs)
+        .padding(.vertical, rowPadding)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(bucket.label), \(bucket.isEmpty ? "nothing logged" : Formatters.value(bucket.value, unit: unit))")
     }
