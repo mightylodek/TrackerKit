@@ -128,11 +128,79 @@ exactly here.
 
 ---
 
+## The screen, as specified by the owner (2026-09-24)
+
+One habit per screen, swipe left or right for the next. Top to bottom:
+
+1. **The visual** — a bar chart with a target line. Tapping it opens entry.
+2. **"Add 10 Min"** — the prominent button, just below the chart. Scroll to it.
+   The label is the habit's own quick-log step, so it reads "Add 10 Min" for
+   Reading and something else for Water.
+3. **"Print Report"** — produces the one-page report specified below.
+
+**Reading is the default habit.**
+
+Notice what this shape settles: there is no list, no dashboard and no navigation
+stack on the watch. A habit is a page. That fits the crown and the swipe, and it
+means `TrackerDashboardView` and everything under it stays on iOS, which is
+already how the `#if os(iOS)` boundary is drawn.
+
+## The watch report — one page, 8.5x11
+
+Owner's spec, verbatim in substance. The person's name at the top, then:
+
+| Block | Content | Notes |
+|---|---|---|
+| Last 7 days | Bar chart with total | x axis `M T W Th F Sa Su` |
+| Last 30 days | Line chart with total | Titled. **No x-axis labels** |
+| Last 6 months | Bar chart with total | x axis is the month abbreviation |
+| Last 7 days | The data points themselves | The numbers, not a chart |
+
+**All four fit on a single sheet.** That is the constraint, not an aspiration —
+the existing `CustomReportPDFRenderer` composes pages tile by tile and already
+knows how to hold four tiles on a portrait sheet, so this is a fixed layout
+rather than a new engine.
+
+What already exists for this: `CustomReportEngine` builds every one of those
+ranges today (`.lastDays(7)`, `.lastDays(30)`, and a six-month range via
+`.absolute`), `Formatters.weekdayInitial` gives the `M T W Th F Sa Su` labels,
+and the monthly breakdown gives the six-month buckets. The renderer is iOS-only
+but the engine is not, so a watch can *build* the report; whether it can print
+one is a separate question — watchOS has no share sheet and no printer access
+worth the name, so this likely hands off to the phone, or to a file the phone
+picks up.
+
+**That hand-off contradicts "standalone" and needs deciding.** If the kids have
+no phone, "Print Report" on the watch has nowhere to send a PDF. Options are a
+report that emails itself from the watch, a report that waits for a phone to
+appear, or accepting that printing is a phone-only feature.
+
+## One profile, no PIN (2026-09-24)
+
+> "i think phone and watch both only need one profile. that way we don't need
+> pin access. the biometrics to get into the device serve that purpose."
+
+The reasoning is sound: a personal device is already gated by Face ID or a
+passcode, and a second 4-digit gate inside it protects nothing a determined
+child couldn't get past anyway. It also removes the worst interaction on the
+watch — a PIN pad at 45mm.
+
+**What this changes:** the profile picker, the PIN pad, the PIN setup flow, the
+authority model and the device-passcode recovery all become dead weight on a
+single-profile device.
+
+**What it should not do is delete them.** The original requirement was a shared
+iPad, and that hardware has not gone away. The right shape is a configuration
+flag — single-profile by default, multi-profile available — so the iPad case is
+one setting rather than a revert. Nothing is thrown away, and the tests that
+cover the PIN work keep running.
+
 ## Suggested order, when we get to it
 
 1. ~~Add `.watchOS(.v26)` and conditionalise the four files.~~ **Done
    2026-09-19.** Cost: one shared file changed, sixteen excluded.
-2. Build a standalone watch target with a single screen: today's trackers, tap
+2. Single-profile mode, which the watch needs before it needs anything else.
+3. Build a standalone watch target with a single screen: today's trackers, tap
    to log.
 3. Add complications off the existing `WidgetSnapshot`.
 4. Only then consider whether profiles/PIN/export belong on the watch at all.

@@ -144,6 +144,20 @@ case, a branch in `DashboardCardView`, and an `addable:` on its gallery entry.
 Tracker-scoped cards must tolerate their tracker being deleted — `canRender`
 decides, and the editor explains.
 
+## Owner decisions pending implementation
+
+- **Version number in Settings** — add on the next install so a build on a device
+  can be identified. `CFBundleVersion` is pinned at 1.0 (1) and never increments,
+  so nothing on the phone distinguishes one build from another today.
+- **One profile, no PIN** (2026-09-24). Phone and watch are personal devices
+  already gated by biometrics; a second 4-digit gate inside protects little. To
+  be a configuration flag rather than a deletion — the shared-iPad case that
+  motivated profiles still exists, and the PIN work is tested and working. See
+  `docs/WATCH.md`.
+- **Watch screen and report spec** — recorded in `docs/WATCH.md`. One habit per
+  screen, swipe between them; chart, quick-add, print. The report is a fixed
+  one-page layout, not a custom report.
+
 ## Open items
 
 - Widget extension is built and working (`Demo/TrackerDashWidgets`), display-only.
