@@ -22,6 +22,7 @@ public struct ProfileGateView<Content: View>: View {
     private let session: ProfileSession
     private let content: () -> Content
     private let allowsProfileCreation: Bool
+    private let profileMode: TrackerKitConfiguration.ProfileMode
     private let deviceAuth: any DeviceOwnerAuthenticating
 
     @State private var isAddingProfile = false
@@ -31,12 +32,14 @@ public struct ProfileGateView<Content: View>: View {
         store: TrackerStore,
         session: ProfileSession,
         allowsProfileCreation: Bool = true,
+        profileMode: TrackerKitConfiguration.ProfileMode = .shared,
         deviceAuth: (any DeviceOwnerAuthenticating)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.store = store
         self.session = session
         self.allowsProfileCreation = allowsProfileCreation
+        self.profileMode = profileMode
         // Injected so a UI test can script it; a test bundle has no entitlement
         // to authenticate anyone, so the real one can never run under test.
         self.deviceAuth = deviceAuth ?? Self.defaultDeviceAuth
@@ -90,6 +93,18 @@ public struct ProfileGateView<Content: View>: View {
     /// someone who has been here before, and a grid holding nothing but an Add
     /// tile reads as a screen that failed to load rather than one waiting on a
     /// first step.
+    /// Creates the one profile a single-user install needs and enters it.
+    ///
+    /// No name to type and no picker to face: the device already knows whose it
+    /// is. The profile is still a real record, so switching to a shared device
+    /// later means adding people rather than migrating anything.
+    private func startSingleProfile() {
+        let profile = store.profiles.first ?? store.addProfile(name: "Me")
+        withAnimation(theme.motion.snappyAnimation) {
+            session.enterWithoutAuthentication(profile)
+        }
+    }
+
     private var welcome: some View {
         VStack(spacing: theme.spacing.xl) {
             Spacer(minLength: 0)
@@ -102,14 +117,23 @@ public struct ProfileGateView<Content: View>: View {
                 Text("Track what matters")
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(theme.textPrimary)
-                Text("Set up a profile to get started. Everyone sharing this device gets their own.")
+                Text(profileMode == .single
+                     ? "Track a few things that matter. Your device's own lock keeps them private."
+                     : "Set up a profile to get started. Everyone sharing this device gets their own.")
                     .font(theme.typography.subheadline)
                     .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
             }
 
-            if allowsProfileCreation {
+            if profileMode == .single {
+                Button("Get started") { startSingleProfile() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(theme.accent)
+                    .foregroundStyle(theme.onAccent)
+                    .accessibilityIdentifier("welcome.getStarted")
+            } else if allowsProfileCreation {
                 Button("Create a profile") { isAddingProfile = true }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)

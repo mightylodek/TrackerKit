@@ -33,6 +33,9 @@ final class PINAuthorityUITests: XCTestCase {
         app.launchEnvironment["TKDEMO_PROFILE"] = profile
         app.launchEnvironment["TKDEMO_INMEMORY"] = "1"
         app.launchEnvironment["TKDEMO_TAB"] = "settings"
+        // These are the shared-iPad rules. The product default is one profile
+        // and no PIN, so this suite has to ask for the other mode.
+        app.launchEnvironment["TKDEMO_SHARED"] = "1"
         app.launch()
         return app
     }

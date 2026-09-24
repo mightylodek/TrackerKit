@@ -72,6 +72,30 @@ public struct TrackerKitConfiguration: Sendable {
     /// put up would defeat the point of it.
     public var autoSelectProfileNamed: String?
 
+    /// How many people this install is for.
+    ///
+    /// A phone or a watch belongs to one person and is already gated by Face ID
+    /// or a passcode, so a second 4-digit gate inside it protects little and
+    /// costs a screen. A shared iPad is the opposite case, which is why this is
+    /// a setting rather than a removal.
+    public enum ProfileMode: String, Sendable, CaseIterable, Hashable {
+        /// One person. No picker, no PIN, no profile management.
+        case single
+        /// Several people sharing a device, each behind their own PIN.
+        case shared
+
+        public var displayName: String {
+            switch self {
+            case .single: "Just me"
+            case .shared: "Shared device"
+            }
+        }
+    }
+
+    /// Defaults to ``ProfileMode/single``: most installs are one person's own
+    /// device.
+    public var profileMode: ProfileMode
+
     public init(
         inMemory: Bool = false,
         appGroupIdentifier: String? = nil,
@@ -84,8 +108,10 @@ public struct TrackerKitConfiguration: Sendable {
         autoLockInterval: TimeInterval = 900,
         autoSelectProfileNamed: String? = nil,
         initialTab: TrackerKitTab = .today,
-        showsHeroStyleSwitcher: Bool = false
+        showsHeroStyleSwitcher: Bool = false,
+        profileMode: ProfileMode = .single
     ) {
+        self.profileMode = profileMode
         self.inMemory = inMemory
         self.appGroupIdentifier = appGroupIdentifier
         self.seedSampleDataWhenEmpty = seedSampleDataWhenEmpty

@@ -35,6 +35,7 @@ public struct TrackerKitRootView: View {
     private let theme: TrackerTheme
     private let initialTab: TrackerKitTab
     private let showsHeroStyleSwitcher: Bool
+    private let profileMode: TrackerKitConfiguration.ProfileMode
 
     public init(configuration: TrackerKitConfiguration = .init()) {
         let store: TrackerStore
@@ -76,20 +77,37 @@ public struct TrackerKitRootView: View {
             session.select(profile)
         }
 
+        // Single-profile installs go straight in. A phone or a watch belongs to
+        // one person and is already behind Face ID or a passcode; a second
+        // 4-digit gate inside it costs a screen and protects little.
+        //
+        // Nothing about the shared-iPad path is removed — it is one setting
+        // away, and its PIN, lockout and authority rules stay under test.
+        if configuration.profileMode == .single, let only = store.profiles.first {
+            session.enterWithoutAuthentication(only)
+        }
+
         _store = State(initialValue: store)
         _session = State(initialValue: session)
         self.theme = configuration.theme
         self.initialTab = configuration.initialTab
         self.showsHeroStyleSwitcher = configuration.showsHeroStyleSwitcher
+        self.profileMode = configuration.profileMode
     }
 
     public var body: some View {
-        ProfileGateView(store: store, session: session) {
+        ProfileGateView(
+            store: store,
+            session: session,
+            allowsProfileCreation: profileMode == .shared,
+            profileMode: profileMode
+        ) {
             TrackerKitTabs(
                 store: store,
                 session: session,
                 initialTab: initialTab,
-                showsHeroStyleSwitcher: showsHeroStyleSwitcher
+                showsHeroStyleSwitcher: showsHeroStyleSwitcher,
+                profileMode: profileMode
             )
         }
         .trackerTheme(theme)
@@ -149,16 +167,19 @@ public struct TrackerKitTabs: View {
     @State private var todayPath = NavigationPath()
 
     private let showsHeroStyleSwitcher: Bool
+    private let profileMode: TrackerKitConfiguration.ProfileMode
 
     public init(
         store: TrackerStore,
         session: ProfileSession,
         initialTab: TrackerKitTab = .today,
-        showsHeroStyleSwitcher: Bool = false
+        showsHeroStyleSwitcher: Bool = false,
+        profileMode: TrackerKitConfiguration.ProfileMode = .shared
     ) {
         self.store = store
         self.session = session
         self.showsHeroStyleSwitcher = showsHeroStyleSwitcher
+        self.profileMode = profileMode
         _selection = State(initialValue: initialTab)
     }
 
@@ -201,7 +222,7 @@ public struct TrackerKitTabs: View {
             .tag(TrackerKitTab.gallery)
 
             NavigationStack {
-                TrackerKitSettingsView(store: store, session: session)
+                TrackerKitSettingsView(store: store, session: session, profileMode: profileMode)
             }
             .tabItem { Label("Settings", systemImage: "gearshape") }
             .tag(TrackerKitTab.settings)
@@ -275,13 +296,23 @@ public struct TrackerKitSettingsView: View {
     @State private var profileSheet: ProfileSheet?
     @State private var showResetConfirmation = false
 
-    public init(store: TrackerStore, session: ProfileSession) {
+    private let profileMode: TrackerKitConfiguration.ProfileMode
+
+    public init(
+        store: TrackerStore,
+        session: ProfileSession,
+        profileMode: TrackerKitConfiguration.ProfileMode = .shared
+    ) {
         self.store = store
         self.session = session
+        self.profileMode = profileMode
     }
 
     public var body: some View {
         List {
+            // A single-user install has nobody to switch to and no PIN to set,
+            // so the whole section is noise rather than a disabled control.
+            if profileMode == .shared {
             Section("Profiles") {
                 ForEach(store.profiles) { profile in
                     let mayEdit = session.authority(over: profile) != .none
@@ -325,6 +356,7 @@ public struct TrackerKitSettingsView: View {
                     Label("Add profile", systemImage: "person.badge.plus")
                 }
                 .accessibilityIdentifier("settings.addProfile")
+            }
             }
 
             Section("Reports") {

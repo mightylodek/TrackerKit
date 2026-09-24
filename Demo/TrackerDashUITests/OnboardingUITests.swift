@@ -110,33 +110,32 @@ final class FirstLaunchUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    private func launchFresh() -> XCUIApplication {
+    private func launchFresh(shared: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["TKDEMO_FRESH"] = "1"
+        if shared { app.launchEnvironment["TKDEMO_SHARED"] = "1" }
         app.launch()
         return app
     }
 
+    /// The default: one person, no picker, no PIN. Their device is already
+    /// gated by Face ID, so there is nothing to name and nobody to choose.
     func testColdStartReachesADashboardWithoutABlindAlley() {
         let app = launchFresh()
 
-        let create = app.buttons["welcome.createProfile"]
-        XCTAssertTrue(create.waitForExistence(timeout: 30), "No welcome screen on a cold start")
-        create.tap()
+        let start = app.buttons["welcome.getStarted"]
+        XCTAssertTrue(start.waitForExistence(timeout: 30), "No welcome screen on a cold start")
+        XCTAssertFalse(
+            app.buttons["welcome.createProfile"].exists,
+            "A single-user install is asking which profile to create"
+        )
+        start.tap()
 
-        let name = app.textFields["profile.name"]
-        XCTAssertTrue(name.waitForExistence(timeout: 10), "Profile name field never appeared")
-        name.tap()
-        name.typeText("Sam")
-
-        app.buttons["profile.save"].tap()
-
-        // The hand-off: creating the first profile must land in the wizard, not
-        // back on a picker holding one tile.
+        // Straight into the wizard — no name to type, no tile to pick.
         let template = app.buttons["template.daily-habits"]
         XCTAssertTrue(
             template.waitForExistence(timeout: 15),
-            "Creating the first profile did not hand off to the wizard"
+            "Getting started did not hand off to the wizard"
         )
         template.tap()
 
@@ -147,6 +146,35 @@ final class FirstLaunchUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["row.Reading"].waitForExistence(timeout: 15),
             "Cold start never reached a populated dashboard"
+        )
+    }
+
+    /// The shared-iPad path still has to work — it is one setting away, and the
+    /// hardware that motivated it has not gone anywhere.
+    func testSharedColdStartStillNamesTheFirstProfile() {
+        let app = launchFresh(shared: true)
+
+        let create = app.buttons["welcome.createProfile"]
+        XCTAssertTrue(create.waitForExistence(timeout: 30), "No welcome screen on a shared cold start")
+        create.tap()
+
+        let name = app.textFields["profile.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "Profile name field never appeared")
+        name.tap()
+        name.typeText("Sam")
+        app.buttons["profile.save"].tap()
+
+        let template = app.buttons["template.daily-habits"]
+        XCTAssertTrue(
+            template.waitForExistence(timeout: 15),
+            "Creating the first profile did not hand off to the wizard"
+        )
+        template.tap()
+        app.buttons["onboarding.confirm"].tap()
+
+        XCTAssertTrue(
+            app.buttons["row.Reading"].waitForExistence(timeout: 15),
+            "Shared cold start never reached a populated dashboard"
         )
     }
 }

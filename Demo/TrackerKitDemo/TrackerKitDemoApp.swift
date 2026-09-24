@@ -66,7 +66,9 @@ struct TrackerKitDemoApp: App {
                         inMemory: true,
                         seedSampleDataWhenEmpty: false,
                         theme: Self.theme(named: ProcessInfo.processInfo.environment["TKDEMO_THEME"]),
-                        autoLockInterval: 0
+                        autoLockInterval: 0,
+                        profileMode: ProcessInfo.processInfo.environment["TKDEMO_SHARED"] != nil
+                            ? .shared : .single
                     )
                 )
             } else if ProcessInfo.processInfo.environment["TKDEMO_SEEDLAYOUT"] != nil {
@@ -106,7 +108,12 @@ struct TrackerKitDemoApp: App {
                     initialTab: ProcessInfo.processInfo.environment["TKDEMO_TAB"]
                         .flatMap(TrackerKitTab.init(rawValue:)) ?? .today,
                     // Showcase control — on for the demo, off in a real app.
-                    showsHeroStyleSwitcher: true
+                    showsHeroStyleSwitcher: true,
+                    // TKDEMO_SHARED=1 opts into the shared-iPad behaviour:
+                    // profile picker, PINs, the lot. The product default is a
+                    // single-user device, so that is what the demo defaults to.
+                    profileMode: ProcessInfo.processInfo.environment["TKDEMO_SHARED"] != nil
+                        ? .shared : .single
                     )
                 )
             }

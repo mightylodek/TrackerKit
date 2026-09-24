@@ -124,6 +124,16 @@ public final class ProfileSession {
         return store.profiles.first(where: { $0.id == id })?.role == .owner
     }
 
+    /// Enters a profile with no gate at all.
+    ///
+    /// For single-profile installs, where the device's own lock is the gate. Does
+    /// not touch the PIN machinery, so switching an install back to shared leaves
+    /// every existing PIN intact and enforced.
+    public func enterWithoutAuthentication(_ profile: Profile) {
+        lastVerification = nil
+        enter(profile.id)
+    }
+
     /// Backs out of the PIN prompt to the picker.
     public func cancelAuthentication() {
         lastVerification = nil

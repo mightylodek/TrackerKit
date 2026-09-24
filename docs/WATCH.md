@@ -170,10 +170,26 @@ one is a separate question — watchOS has no share sheet and no printer access
 worth the name, so this likely hands off to the phone, or to a file the phone
 picks up.
 
-**That hand-off contradicts "standalone" and needs deciding.** If the kids have
-no phone, "Print Report" on the watch has nowhere to send a PDF. Options are a
-report that emails itself from the watch, a report that waits for a phone to
-appear, or accepting that printing is a phone-only feature.
+**Owner's call (2026-09-24): the watch emails the report itself.** Standalone
+means standalone — the report leaves the watch without a phone in the loop.
+
+**This runs into a wall that needs solving before any of it is built.** watchOS
+has no API for sending mail. `MessageUI` does not exist there, and there is no
+system composer to hand a draft to. That leaves three routes, none free:
+
+| Route | Cost |
+|---|---|
+| SMTP straight from the watch | Needs credentials on the device. A shipped app cannot embed a mail password, and a child's watch is exactly where not to put one |
+| A small relay service | Works, and is the normal answer — but the owner's standing decision for this project is **local-only, no backend** |
+| A mail provider's API with a per-user token | No shared secret, but still a network service and still a token to obtain and store |
+
+So "the watch emails it" is a product decision that needs a matching
+infrastructure decision. Worth settling before the watch target exists, because
+it decides whether this project stays backend-free.
+
+An interim that keeps the spec honest: the watch **builds** the report — the
+engine already runs there — and writes it to the App Group, so it is ready the
+moment a delivery route exists. Nothing about the screen changes later.
 
 ## One profile, no PIN (2026-09-24)
 
