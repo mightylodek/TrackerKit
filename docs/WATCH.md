@@ -187,9 +187,40 @@ So "the watch emails it" is a product decision that needs a matching
 infrastructure decision. Worth settling before the watch target exists, because
 it decides whether this project stays backend-free.
 
-An interim that keeps the spec honest: the watch **builds** the report — the
-engine already runs there — and writes it to the App Group, so it is ready the
-moment a delivery route exists. Nothing about the screen changes later.
+**Correction (2026-09-24): there is a fourth route, and it is the right one.**
+An earlier draft of this file listed SMTP, a relay service and a provider API as
+the only options, and concluded the project would have to grow a backend. That
+was wrong — it missed CloudKit.
+
+Apple's own guidance for Family Setup names two data-transfer strategies that do
+**not** need a companion iPhone: `URLSession` straight to a server, and **Core
+Data with CloudKit**, which is documented as supporting Family Setup. CloudKit is
+not a backend anyone here has to run — it is Apple's, tied to the iCloud account,
+and free at this scale. It does not break the local-only rule the way a rented
+server would.
+
+**What is confirmed, and what is not:**
+
+| | Status |
+|---|---|
+| A Family Setup watch can sync via CloudKit to the child's own devices | Documented by Apple |
+| A parent's iPhone can *read* that data | **Unconfirmed.** Needs `CKShare`, and whether a Family Setup child account can participate in a share is the open question |
+| A Family Setup watch can reach a server over `URLSession` | Documented by Apple |
+| A Family Setup watch can hand off to the parent's iPhone via `WCSession` | No. The parent's phone hosts no companion app for the child's watch |
+
+So the owner's instinct — "my watch can connect to theirs, can I download their
+data" — is closer to workable than the earlier note suggested, but through
+CloudKit sharing rather than through the watch pairing. **The pairing is a
+dead end for app data**; the iCloud account is the live one.
+
+Worth a spike before it is designed around: create a `CKShare` from a Family
+Setup child account and accept it on a parent's device. If that works the whole
+delivery problem collapses into sync, and "Print Report" becomes a phone feature
+reading synced data rather than a watch feature with nowhere to send a file.
+
+An interim that keeps the spec honest either way: the watch **builds** the report
+— the engine already runs there — and writes it to the App Group, so it is ready
+the moment a delivery route exists. Nothing about the screen changes later.
 
 ## One profile, no PIN (2026-09-24)
 
